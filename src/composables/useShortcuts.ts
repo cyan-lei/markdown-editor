@@ -16,12 +16,13 @@ function normalizeCombo(e: KeyboardEvent): string {
 export function useShortcuts(target: 'window' | Ref<HTMLElement | null>) {
   const handlers = new Map<string, ShortcutHandler>()
 
-  const handleKeydown = (e: KeyboardEvent) => {
-    const combo = normalizeCombo(e)
+  const handleKeydown = (e: Event) => {
+    const keyEvent = e as KeyboardEvent
+    const combo = normalizeCombo(keyEvent)
     if (!combo) return
     const handler = handlers.get(combo)
     if (handler) {
-      handler(e)
+      handler(keyEvent)
     }
   }
 
