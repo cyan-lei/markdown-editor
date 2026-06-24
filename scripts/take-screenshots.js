@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const screenshotsDir = path.join(__dirname, 'screenshots');
 
-// 确保截图目录存在
 import fs from 'fs';
 if (!fs.existsSync(screenshotsDir)) {
   fs.mkdirSync(screenshotsDir, { recursive: true });
@@ -88,7 +87,10 @@ $$
 
 async function takeScreenshots() {
   console.log('启动浏览器...');
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({ 
+    headless: false,
+    channel: 'chrome'  // 使用系统已安装的 Chrome
+  });
   const context = await browser.newContext({
     viewport: { width: 1400, height: 900 }
   });
@@ -96,9 +98,9 @@ async function takeScreenshots() {
 
   try {
     // 访问应用
-    console.log('访问 http://localhost:5174/');
-    await page.goto('http://localhost:5174/', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1000);
+    console.log('访问应用...');
+    await page.goto('http://localhost:5173/', { waitUntil: 'networkidle' });
+    await page.waitForTimeout(3000); // 等待 mermaid/katex CDN 加载完成
 
     // 截图 1: 初始空状态
     console.log('截图 1: 初始空状态');
@@ -114,9 +116,37 @@ async function takeScreenshots() {
 
     // 在编辑器中输入演示内容
     console.log('输入演示内容...');
-    const editor = page.locator('textarea.editor');
+    const editor = page.locator('textarea');
     await editor.fill(DEMO_MARKDOWN);
-    await page.waitForTimeout(1000); // 等待渲染
+    await page.waitForTimeout(2000); // 等待初始渲染
+
+    // 手动触发 mermaid 渲染（确保完成）
+    console.log('触发 mermaid 渲染...');
+    await page.evaluate(async () => {
+      const preview = document.querySelector('.preview');
+      if (preview && window.mermaid) {
+        const mermaidDivs = preview.querySelectorAll('.mermaid:not([data-processed])');
+        if (mermaidDivs.length > 0) {
+          window.mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'loose'
+          });
+          for (let i = 0; i < mermaidDivs.length; i++) {
+            const div = mermaidDivs[i];
+            try {
+              const code = div.textContent || '';
+              const { svg } = await window.mermaid.render(`mermaid-svg-${Date.now()}-${i}`, code);
+              div.innerHTML = svg;
+              div.setAttribute('data-processed', 'true');
+            } catch (e) {
+              console.error('Mermaid render error:', e);
+            }
+          }
+        }
+      }
+    });
+    await page.waitForTimeout(2000); // 等待渲染完成
 
     // 截图 2: 整体界面（编辑器 + 预览）
     console.log('截图 2: 整体界面');
@@ -128,19 +158,23 @@ async function takeScreenshots() {
     // 截图 3: 工具栏
     console.log('截图 3: 工具栏');
     const toolbar = page.locator('.editor-toolbar');
-    await toolbar.screenshot({ 
-      path: path.join(screenshotsDir, '03-toolbar.png')
-    });
+    if (await toolbar.count() > 0) {
+      await toolbar.screenshot({ 
+        path: path.join(screenshotsDir, '03-toolbar.png')
+      });
+    }
 
     // 截图 4: 代码块预览
     console.log('截图 4: 代码块预览');
     const preview = page.locator('.preview');
     const codeBlock = preview.locator('pre').first();
-    await codeBlock.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(300);
-    await preview.screenshot({ 
-      path: path.join(screenshotsDir, '04-code-block.png')
-    });
+    if (await codeBlock.count() > 0) {
+      await codeBlock.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(300);
+      await preview.screenshot({ 
+        path: path.join(screenshotsDir, '04-code-block.png')
+      });
+    }
 
     // 截图 5: 任务列表
     console.log('截图 5: 任务列表');
@@ -164,25 +198,34 @@ async function takeScreenshots() {
       });
     }
 
-    // 截图 7: Mermaid 图表
+    // 截图 7: Mermaid 图表 - 等待 SVG 渲染完成
     console.log('截图 7: Mermaid 图表');
     const mermaid = preview.locator('.mermaid').first();
     if (await mermaid.count() > 0) {
       await mermaid.scrollIntoViewIfNeeded();
-      await page.waitForTimeout(1000); // 等待 Mermaid 渲染
-      await mermaid.screenshot({ 
+      // 等待 mermaid SVG 渲染完成（检查 svg 子元素且有实际内容）
+      await page.waitForFunction(() => {
+        const el = document.querySelector('.mermaid[data-processed="true"] svg');
+        if (!el) return false;
+        return el.children.length > 0 || el.innerHTML.length > 100;
+      }, { timeout: 15000 }).catch(() => console.log('  mermaid SVG 等待超时'));
+      await page.waitForTimeout(2000); // 额外等待确保渲染完成
+      // 截取整个预览面板（确保能看到完整的 mermaid 图表）
+      await preview.screenshot({ 
         path: path.join(screenshotsDir, '07-mermaid.png')
       });
+      console.log('  mermaid 截图完成');
+    } else {
+      console.log('  未找到 mermaid 元素');
     }
 
     // 截图 8: 数学公式
     console.log('截图 8: 数学公式');
-    // 滚动到公式部分
     await page.evaluate(() => {
       const preview = document.querySelector('.preview');
       if (preview) preview.scrollTop = preview.scrollHeight;
     });
-    await page.waitForTimeout(1000); // 等待 KaTeX 渲染
+    await page.waitForTimeout(2000); // 等待 KaTeX 渲染
     await preview.screenshot({ 
       path: path.join(screenshotsDir, '08-math-formula.png')
     });
@@ -207,8 +250,13 @@ async function takeScreenshots() {
 
     // 截图 11: 深色主题
     console.log('截图 11: 深色主题');
+    // 先滚动回顶部
+    await page.evaluate(() => {
+      const preview = document.querySelector('.preview');
+      if (preview) preview.scrollTop = 0;
+    });
     await page.click('button[title*="切换"]');
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(1000); // 等待主题切换和重新渲染
     await page.screenshot({ 
       path: path.join(screenshotsDir, '11-dark-theme.png'),
       fullPage: false 

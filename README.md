@@ -1,6 +1,6 @@
 # Markdown Editor
 
-基于 Vue3 + Vite 构建的现代化 Markdown 编辑器，支持实时预览、多标签编辑、主题切换等功能。
+基于 Vue3 + Vite 构建的现代化 Markdown 编辑器，支持实时预览、多标签编辑、主题切换、Mermaid 图表、数学公式等功能。
 
 ## 功能预览
 
@@ -25,7 +25,10 @@
 
 ![任务列表](scripts/screenshots/05-task-list.png)
 
-- **Mermaid 图表** — 支持 ```` ```mermaid ```` 代码块，动态渲染流程图、时序图等
+- **Mermaid 图表** — 支持 ```` ```mermaid ```` 代码块，动态渲染流程图、时序图、甘特图、类图、饼图等
+
+![Mermaid 图表](scripts/screenshots/07-mermaid.png)
+
 - **数学公式** — 支持 KaTeX 渲染，`$...$` 行内公式、`$$...$$` 块级公式
 
 ![数学公式](scripts/screenshots/08-math-formula.png)
@@ -67,8 +70,26 @@
 - **Vue 3** — Composition API + `<script setup>`
 - **Vite 5** — 构建工具
 - **marked** — Markdown 解析
+- **marked-highlight** — 代码高亮集成
 - **highlight.js** — 代码语法高亮
+- **Mermaid** — 图表渲染
+- **KaTeX** — 数学公式渲染
 - **File System Access API** — 本地文件读写
+
+## 项目结构
+
+```
+markdown-editor/
+├── src/
+│   ├── components/      # Vue 组件
+│   ├── composables/     # 组合式函数（状态管理、快捷键等）
+│   ├── services/        # 核心服务（Markdown 渲染、文件操作等）
+│   ├── styles/          # 全局样式
+│   ├── types/           # TypeScript 类型定义
+│   └── views/           # 页面视图
+├── docs/                # 文档
+└── scripts/             # 截图脚本
+```
 
 ## 安装
 
@@ -88,3 +109,7 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## 许可证
+
+MIT

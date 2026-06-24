@@ -16,7 +16,7 @@
 
 ![代码块](../scripts/screenshots/04-code-block.png)
 
-基于 highlight.js 实现语法高亮，支持多种编程语言。预览区代码块右上角显示语言标签，方便识别。
+基于 highlight.js 实现语法高亮，支持多种编程语言。预览区代码块采用 macOS 风格窗口装饰，右上角显示语言标签。
 
 ## 任务列表
 
@@ -28,7 +28,13 @@
 
 ![表格](../scripts/screenshots/06-table.png)
 
-支持 GFM（GitHub Flavored Markdown）表格语法，预览区自动渲染为格式化表格。
+支持 GFM（GitHub Flavored Markdown）表格语法，预览区自动渲染为格式化表格，带斑马纹样式。
+
+## Mermaid 图表
+
+![Mermaid 图表](../scripts/screenshots/07-mermaid.png)
+
+支持 Mermaid 语法，可渲染流程图、时序图、甘特图、类图、饼图、状态图、ER 图、Git 图等多种图表类型。
 
 ## 数学公式
 
@@ -46,4 +52,4 @@
 
 ![深色主题](../scripts/screenshots/11-dark-theme.png)
 
-一键切换深色/浅色主题，偏好设置自动持久化。
+一键切换深色/浅色主题，Mermaid 图表和代码高亮会根据主题自动适配，偏好设置自动持久化。
