@@ -47,6 +47,10 @@ const paths: Record<string, string> = {
     <line x1="12" y1="18" x2="12" y2="12"/>
     <line x1="9" y1="15" x2="15" y2="15"/>`,
   download: `
-    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>`
+    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/>`,
+  duck: `
+    <path d="M12 2C8 2 6 4 6 7c0 2 1 3 2 4-2 1-4 3-4 6 0 2 2 4 5 4h6c3 0 5-2 5-4 0-3-2-5-4-6 1-1 2-2 2-4 0-3-2-5-6-5z"/>
+    <circle cx="10" cy="7" r="1" fill="currentColor"/>
+    <path d="M14 10c1 0 2-1 2-2"/>`
 }
 </script>

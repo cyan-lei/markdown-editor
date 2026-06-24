@@ -132,7 +132,9 @@ export async function renderExtensions(container: HTMLElement): Promise<void> {
   if (mermaidDivs.length > 0) {
     const mermaid = await waitForMermaid()
     if (mermaid) {
-      const isDark = document.documentElement.classList.contains('dark')
+      // duck 主题也是深色系，使用 dark 主题渲染 mermaid
+      const isDark = document.documentElement.classList.contains('dark') ||
+                     document.documentElement.classList.contains('theme-duck')
       mermaid.initialize({
         startOnLoad: false,
         theme: isDark ? 'dark' : 'default',
@@ -142,8 +144,11 @@ export async function renderExtensions(container: HTMLElement): Promise<void> {
       let renderIndex = 0
       for (const div of mermaidDivs) {
         try {
-          // textContent 会自动反转义 HTML 实体，得到原始 mermaid 代码
-          const code = div.textContent || ''
+          // 优先从 data-raw 获取原始代码（主题切换重渲染场景）
+          // 否则从 textContent 获取（首次渲染）
+          const code = div.getAttribute('data-raw') || div.textContent || ''
+          // 保存原始代码，供主题切换时重渲染使用
+          div.setAttribute('data-raw', code)
           const id = `mermaid-svg-${Date.now()}-${renderIndex++}`
           const { svg } = await mermaid.render(id, code)
           div.innerHTML = svg

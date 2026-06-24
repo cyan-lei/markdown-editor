@@ -63,3 +63,36 @@
   --hljs-tag: #569cd6;
   --hljs-name: #569cd6;
 }
+
+/* ===== Duck 主题（灵感来自 MotherDuck） ===== */
+:root.theme-duck {
+  --bg-primary: #0c0a09;
+  --bg-secondary: #1c1917;
+  --bg-tertiary: #292524;
+  --text-primary: #fef3c7;
+  --text-secondary: #d6d3d1;
+  --text-tertiary: #78716c;
+  --border: #44403c;
+  --accent: #fbbf24;
+  --accent-hover: #f59e0b;
+  --accent-light: #422006;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.6);
+  --code-bg: #292524;
+  --code-text: #fbbf24;
+  --preview-hr: #44403c;
+  --code-block-bg: #18181b;
+  --code-block-text: #e4e4e7;
+  --code-lang-bg: #292524;
+  --code-lang-text: #a8a29e;
+  --hljs-keyword: #fbbf24;
+  --hljs-string: #86efac;
+  --hljs-number: #7dd3fc;
+  --hljs-function: #f9a8d4;
+  --hljs-comment: #78716c;
+  --hljs-selector-class: #fdba74;
+  --hljs-attr: #7dd3fc;
+  --hljs-built_in: #fdba74;
+  --hljs-tag: #86efac;
+  --hljs-name: #86efac;
+}

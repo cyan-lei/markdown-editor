@@ -2,17 +2,32 @@
   <div class="editor-view" @dragover.prevent @drop.prevent="handleDrop">
     <AppHeader>
       <template #actions>
-        <button
-          class="btn-icon"
-          @click="themeService.toggle()"
-          :title="themeService.isDark.value ? '切换浅色模式' : '切换深色模式'"
-          :aria-label="themeService.isDark.value ? '切换浅色模式' : '切换深色模式'"
-        >
-          <AppIcon
-            :name="themeService.isDark.value ? 'sun' : 'moon'"
-            :color="themeService.isDark.value ? '#f59e0b' : '#6366f1'"
-          />
-        </button>
+        <div class="theme-switcher" @click.stop>
+          <button
+            class="btn-icon"
+            @click="showThemeMenu = !showThemeMenu"
+            title="切换主题"
+            aria-label="切换主题"
+          >
+            <AppIcon
+              :name="themeService.currentTheme.value === 'light' ? 'sun' : themeService.currentTheme.value === 'dark' ? 'moon' : 'duck'"
+              :color="themeService.currentTheme.value === 'duck' ? '#fbbf24' : themeService.isDark.value ? '#f59e0b' : '#6366f1'"
+            />
+          </button>
+          <div class="theme-menu" v-if="showThemeMenu" @click.stop>
+            <button
+              v-for="opt in themeOptions"
+              :key="opt.name"
+              class="theme-menu-item"
+              :class="{ active: themeService.currentTheme.value === opt.name }"
+              @click="themeService.setTheme(opt.name); showThemeMenu = false"
+            >
+              <span class="theme-menu-dot" :class="'dot-' + opt.name"></span>
+              {{ opt.label }}
+              <span v-if="themeService.currentTheme.value === opt.name" class="theme-check">✓</span>
+            </button>
+          </div>
+        </div>
         <button class="btn-secondary" @click="handleOpenFiles" aria-label="打开文件">
           <AppIcon name="folderOpen" :size="16" />
           打开
@@ -147,7 +162,7 @@ import { useRecentFiles } from '@/composables/useRecentFiles'
 import { usePreferences, type Preferences } from '@/composables/usePreferences'
 import { useToc } from '@/composables/useToc'
 import { fileService } from '@/services/fileService'
-import { themeService } from '@/services/themeService'
+import { themeService, themeOptions } from '@/services/themeService'
 import { editorService } from '@/services/editorService'
 import { clearHistory } from '@/composables/useHistory'
 
@@ -156,6 +171,7 @@ const showSaveModal = ref(false)
 const showPreferences = ref(false)
 const showExportMenu = ref(false)
 const showDraftModal = ref(false)
+const showThemeMenu = ref(false)
 const drafts = ref(getDrafts())
 const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
@@ -389,9 +405,10 @@ register('ctrl+w', (e) => {
 register('ctrl+tab', (e) => { e.preventDefault(); switchToNextTab() })
 register('ctrl+s', (e) => { e.preventDefault(); handleSave() })
 
-// --- Close export menu on outside click ---
+// --- Close menus on outside click ---
 const handleOutsideClick = () => {
   showExportMenu.value = false
+  showThemeMenu.value = false
 }
 
 // --- Lifecycle ---
@@ -420,5 +437,74 @@ watch(() => preferences.value.editorWidth, (val) => {
 <style>
 .export-wrapper {
   position: relative;
+}
+
+.theme-switcher {
+  position: relative;
+}
+
+.theme-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 200;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  padding: 4px;
+  min-width: 140px;
+}
+
+.theme-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: var(--radius);
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.theme-menu-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.theme-menu-item.active {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.theme-menu-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.theme-menu-dot.dot-light {
+  background: #fafafa;
+}
+
+.theme-menu-dot.dot-dark {
+  background: #1a1a1a;
+}
+
+.theme-menu-dot.dot-duck {
+  background: #fbbf24;
+}
+
+.theme-check {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 14px;
 }
 </style>
