@@ -4,7 +4,7 @@
 
 ## 功能预览
 
-![整体界面](scripts/screenshots/02-main-interface.png)
+![整体界面](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/02-main-interface.png)
 
 ## 功能特性
 
@@ -14,30 +14,30 @@
 - **可拖拽分栏** — 编辑器与预览区宽度可自由拖拽调整
 - **格式化插入** — 工具栏快捷插入粗体、斜体、删除线、行内代码、链接、图片、标题、引用、有序/无序列表、任务列表、表格、分割线
 
-![工具栏](scripts/screenshots/03-toolbar.png)
+![工具栏](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/03-toolbar.png)
 
 - **语法高亮** — 基于 highlight.js 的代码块高亮，预览区显示语言标签
 
-![代码块](scripts/screenshots/04-code-block.png)
+![代码块](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/04-code-block.png)
 
 - **目录导航（TOC）** — 自动提取标题生成目录，点击跳转对应位置
 - **任务列表** — 支持 `- [ ]` / `- [x]` 语法，预览区可直接点击复选框切换状态
 
-![任务列表](scripts/screenshots/05-task-list.png)
+![任务列表](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/05-task-list.png)
 
 - **Mermaid 图表** — 支持 ```` ```mermaid ```` 代码块，动态渲染流程图、时序图、甘特图、类图、饼图等
 
-![Mermaid 图表](scripts/screenshots/07-mermaid.png)
+![Mermaid 图表](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/07-mermaid.png)
 
 - **数学公式** — 支持 KaTeX 渲染，`$...$` 行内公式、`$$...$$` 块级公式
 
-![数学公式](scripts/screenshots/08-math-formula.png)
+![数学公式](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/08-math-formula.png)
 
 - **搜索与替换** — 支持大小写敏感、逐个定位、替换/全部替换
 - **撤销/重做** — 完整编辑历史记录
 - **状态栏** — 实时显示光标所在行号、列号、字符数、词数、选中字符数
 
-![状态栏](scripts/screenshots/10-status-bar.png)
+![状态栏](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/10-status-bar.png)
 
 ### 文件管理
 - **打开/保存文件** — 通过 File System Access API 直接读写本地文件
@@ -58,7 +58,7 @@
 ### 个性化
 - **深色/浅色主题** — 一键切换，偏好持久化
 
-![深色主题](scripts/screenshots/11-dark-theme.png)
+![深色主题](https://raw.githubusercontent.com/cyan-lei/markdown-editor/master/scripts/screenshots/11-dark-theme.png)
 
 - **偏好设置** — 可调整字体大小、行高、编辑器宽度等
 - **快捷键** — 支持 `Ctrl+N` 新建、`Ctrl+O` 打开、`Ctrl+S` 保存、`Ctrl+W` 关闭标签、`Ctrl+Tab` 切换标签
