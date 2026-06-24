@@ -61,13 +61,20 @@ const markedInstance = new Marked(
 markedInstance.use({ breaks: true, gfm: true })
 
 // Custom renderer: wrap mermaid code blocks in a div for post-processing
+// marked v11 renderer.code 签名: code(code, infoString, escaped)
 markedInstance.use({
   renderer: {
-    code(token) {
-      if (token.lang === 'mermaid') {
-        return `<div class="mermaid">${token.text}</div>`
+    code(code: string, infoString: string | undefined): string | false {
+      const lang = (infoString || '').trim().split(/\s+/)[0]
+      if (lang === 'mermaid') {
+        // 转义 HTML 特殊字符，防止 XSS / 错误解析
+        const escaped = code
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+        return `<div class="mermaid">${escaped}</div>\n`
       }
-      return false // 使用默认的 renderer（包括 markedHighlight 的高亮）
+      return false // 回退到 markedHighlight 的 renderer（高亮处理）
     }
   }
 })
@@ -89,6 +96,30 @@ export function renderMarkdown(content: string): string {
 }
 
 /**
+ * 等待 window.mermaid 加载完成（最多等待 3 秒）
+ */
+function waitForMermaid(maxWait = 3000): Promise<any> {
+  return new Promise((resolve) => {
+    const mermaid = (window as any).mermaid
+    if (mermaid) {
+      resolve(mermaid)
+      return
+    }
+    const start = Date.now()
+    const timer = setInterval(() => {
+      const m = (window as any).mermaid
+      if (m) {
+        clearInterval(timer)
+        resolve(m)
+      } else if (Date.now() - start > maxWait) {
+        clearInterval(timer)
+        resolve(null)
+      }
+    }, 50)
+  })
+}
+
+/**
  * Post-process rendered HTML in a DOM container:
  * - Render Mermaid diagrams
  * - Render KaTeX math expressions
@@ -99,64 +130,68 @@ export async function renderExtensions(container: HTMLElement): Promise<void> {
   // --- Mermaid ---
   const mermaidDivs = container.querySelectorAll('.mermaid:not([data-processed])')
   if (mermaidDivs.length > 0) {
-    try {
-      await loadScript(CDN.mermaid)
-      const mermaid = (window as any).mermaid
-      if (mermaid) {
-        mermaid.initialize({ startOnLoad: false, theme: document.documentElement.classList.contains('dark') ? 'dark' : 'default' })
-        for (const div of mermaidDivs) {
-          try {
-            const code = div.textContent || ''
-            const { svg } = await mermaid.render(`mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`, code)
-            div.innerHTML = svg
-            div.setAttribute('data-processed', 'true')
-          } catch {
-            div.innerHTML = '<span style="color:#dc2626;">Mermaid 图表渲染失败</span>'
-            div.setAttribute('data-processed', 'true')
-          }
+    const mermaid = await waitForMermaid()
+    if (mermaid) {
+      const isDark = document.documentElement.classList.contains('dark')
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: isDark ? 'dark' : 'default',
+        securityLevel: 'loose',
+        fontFamily: 'inherit'
+      })
+      let renderIndex = 0
+      for (const div of mermaidDivs) {
+        try {
+          // textContent 会自动反转义 HTML 实体，得到原始 mermaid 代码
+          const code = div.textContent || ''
+          const id = `mermaid-svg-${Date.now()}-${renderIndex++}`
+          const { svg } = await mermaid.render(id, code)
+          div.innerHTML = svg
+          div.setAttribute('data-processed', 'true')
+        } catch (err) {
+          console.warn('Mermaid render error:', err)
+          div.innerHTML = '<span style="color:#dc2626;padding:8px;">⚠ Mermaid 图表渲染失败，请检查语法</span>'
+          div.setAttribute('data-processed', 'true')
         }
       }
-    } catch {
-      // CDN load failed — leave as text
+    } else {
+      console.warn('Mermaid library not loaded')
     }
   }
 
   // --- KaTeX (inline $...$ and block $$...$$) ---
   const hasMath = /\$/.test(container.textContent || '')
   if (hasMath) {
-    try {
-      await Promise.all([loadStyle(CDN.katexCss), loadScript(CDN.katexJs)])
-      const katex = (window as any).katex
-      if (katex) {
-        // Block math: $$...$$
-        const blockRegex = /\$\$([\s\S]+?)\$\$/g
-        const inlineRegex = /(?<!\$)\$(?!\$)([^$\n]+?)\$/g
+    const katex = (window as any).katex
+    if (katex) {
+      // Block math: $$...$$
+      const blockRegex = /\$\$([\s\S]+?)\$\$/g
+      const inlineRegex = /(?<!\$)\$(?!\$)([^$\n]+?)\$/g
 
-        const walk = (node: Node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            const text = node.textContent || ''
-            if (!text.includes('$')) return
-            const span = document.createElement('span')
-            let html = text
-            html = html.replace(blockRegex, (_, expr) => {
-              try { return katex.renderToString(expr, { displayMode: true, throwOnError: false }) } catch { return _ }
-            })
-            html = html.replace(inlineRegex, (_, expr) => {
-              try { return katex.renderToString(expr, { displayMode: false, throwOnError: false }) } catch { return _ }
-            })
-            span.innerHTML = html
-            node.parentNode?.replaceChild(span, node)
-          } else if (node.nodeType === Node.ELEMENT_NODE && !(node as HTMLElement).classList.contains('mermaid')) {
-            // Skip code blocks and pre elements
-            const el = node as HTMLElement
-            if (el.tagName === 'CODE' || el.tagName === 'PRE') return
-            Array.from(node.childNodes).forEach(walk)
-          }
+      const walk = (node: Node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const text = node.textContent || ''
+          if (!text.includes('$')) return
+          const span = document.createElement('span')
+          let html = text
+          html = html.replace(blockRegex, (_, expr) => {
+            try { return katex.renderToString(expr, { displayMode: true, throwOnError: false }) } catch { return _ }
+          })
+          html = html.replace(inlineRegex, (_, expr) => {
+            try { return katex.renderToString(expr, { displayMode: false, throwOnError: false }) } catch { return _ }
+          })
+          span.innerHTML = html
+          node.parentNode?.replaceChild(span, node)
+        } else if (node.nodeType === Node.ELEMENT_NODE && !(node as HTMLElement).classList.contains('mermaid')) {
+          // Skip code blocks and pre elements
+          const el = node as HTMLElement
+          if (el.tagName === 'CODE' || el.tagName === 'PRE') return
+          Array.from(node.childNodes).forEach(walk)
         }
-        Array.from(container.childNodes).forEach(walk)
       }
-    } catch {
-      // CDN load failed — leave as text
+      Array.from(container.childNodes).forEach(walk)
+    } else {
+      console.warn('KaTeX library not loaded')
     }
   }
 }

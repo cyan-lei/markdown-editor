@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, onMounted } from 'vue'
 import { renderExtensions } from '@/services/markdownService'
 
 const props = defineProps<{
@@ -23,18 +23,32 @@ const emit = defineEmits<{
 const scrollRatio = ref(0)
 const previewRef = ref<HTMLElement | null>(null)
 
+// 渲染 Mermaid/KaTeX 扩展
+const processExtensions = async () => {
+  await nextTick()
+  if (previewRef.value) {
+    try {
+      await renderExtensions(previewRef.value)
+    } catch (err) {
+      console.error('Render extensions failed:', err)
+    }
+  }
+}
+
 watch(() => props.html, () => {
   if (previewRef.value && scrollRatio.value > 0) {
     const el = previewRef.value
     const scrollHeight = el.scrollHeight - el.clientHeight
     el.scrollTop = scrollRatio.value * scrollHeight
   }
-  // Post-process Mermaid/KaTeX after DOM update
-  nextTick(() => {
-    if (previewRef.value) {
-      renderExtensions(previewRef.value)
-    }
-  })
+  processExtensions()
+})
+
+// 组件挂载后立即处理一次（解决首次打开文件时 mermaid 不渲染的问题）
+onMounted(() => {
+  if (props.html) {
+    processExtensions()
+  }
 })
 
 const onScroll = () => {
@@ -344,5 +358,19 @@ defineExpose({
 .preview :deep(.mermaid) {
   text-align: center;
   margin: 16px 0;
+  padding: 16px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  min-height: 60px;
+}
+
+.preview :deep(.mermaid svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+.preview :deep(.mermaid[data-processed]) {
+  background: var(--bg-secondary);
 }
 </style>
