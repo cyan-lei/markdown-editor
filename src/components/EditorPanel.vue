@@ -93,7 +93,10 @@ const updateCursor = () => {
 const wordCount = computed(() => {
   const text = props.modelValue.trim()
   if (!text) return 0
-  return text.split(/\s+/).length
+  // 统计英文单词数 + 中文字符数，支持中英混排
+  const englishWords = text.match(/[a-zA-Z0-9]+/g)?.length || 0
+  const chineseChars = text.match(/[\u4e00-\u9fa5]/g)?.length || 0
+  return englishWords + chineseChars
 })
 
 // --- History ---

@@ -221,7 +221,7 @@ defineEmits<{
   font-size: 14px;
   font-weight: 500;
   color: white;
-  background: var(--text-primary);
+  background: var(--accent);
   border: none;
   border-radius: 999px;
   cursor: pointer;
@@ -231,6 +231,7 @@ defineEmits<{
 
 .btn-primary:hover {
   transform: translateY(-2px);
+  background: var(--accent-hover);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 

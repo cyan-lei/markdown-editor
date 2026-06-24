@@ -91,9 +91,11 @@ export function useSearch(
     const regex = new RegExp(escaped, flags)
     const newText = text.replace(regex, replaceQuery.value)
     setContent(newText)
-    matches = []
-    matchCount.value = 0
-    currentMatch.value = -1
+    // 重新计算匹配，而不是直接清空
+    matches = findMatches(newText, searchQuery.value, caseSensitive.value)
+    matchCount.value = matches.length
+    currentMatch.value = matches.length > 0 ? 0 : -1
+    if (currentMatch.value >= 0) selectMatch(0)
   }
 
   return {

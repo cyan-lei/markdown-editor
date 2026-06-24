@@ -70,9 +70,9 @@ export function useAutoSave(tabs: Ref<Tab[]>) {
     }
   }
 
-  // Save immediately when a tab is marked modified
+  // 当标签的修改状态变化时立即保存
   watch(
-    () => tabs.value.map(t => `${t.id}:${t.modified}`).join(','),
+    () => tabs.value.some(t => t.modified),
     () => saveAll()
   )
 

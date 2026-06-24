@@ -73,6 +73,8 @@ export function useHistory(tabId: Ref<number | null>) {
 
     const entry = stack.past.pop()
     if (!entry) return null
+    // undo 时不在此处压入 future，由调用方在获取 undo 结果前
+    // 通过 pushToFuture 保存当前状态
     updateFlags(id)
     return entry
   }
