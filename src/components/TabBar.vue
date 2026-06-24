@@ -1,16 +1,28 @@
 <template>
   <div class="tab-bar" v-if="tabs.length > 0">
-    <div
-      v-for="tab in tabs"
-      :key="tab.id"
-      class="tab"
-      :class="{ active: activeTabId === tab.id }"
-      @click="$emit('switch', tab.id)"
-      @contextmenu.prevent="$emit('contextmenu', $event, tab.id)"
-    >
-      <span class="tab-name">{{ tab.name || '未命名' }}</span>
-      <span class="tab-modified" v-if="tab.modified">●</span>
-      <button class="tab-close" @click.stop="$emit('close', tab.id)" :aria-label="`关闭 ${tab.name}`">×</button>
+    <button class="toc-btn" @click="$emit('toggleToc')" :class="{ active: tocVisible }" :title="tocVisible ? '隐藏目录' : '显示目录'" aria-label="目录">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6"/>
+        <line x1="8" y1="12" x2="21" y2="12"/>
+        <line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/>
+        <line x1="3" y1="12" x2="3.01" y2="12"/>
+        <line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+    </button>
+    <div class="tab-scroll">
+      <div
+        v-for="tab in tabs"
+        :key="tab.id"
+        class="tab"
+        :class="{ active: activeTabId === tab.id }"
+        @click="$emit('switch', tab.id)"
+        @contextmenu.prevent="$emit('contextmenu', $event, tab.id)"
+      >
+        <span class="tab-name">{{ tab.name || '未命名' }}</span>
+        <span class="tab-modified" v-if="tab.modified">●</span>
+        <button class="tab-close" @click.stop="$emit('close', tab.id)" :aria-label="`关闭 ${tab.name}`">×</button>
+      </div>
     </div>
   </div>
 </template>
@@ -21,12 +33,14 @@ import type { Tab } from '@/types'
 defineProps<{
   tabs: Tab[]
   activeTabId: number | null
+  tocVisible: boolean
 }>()
 
 defineEmits<{
   (e: 'switch', id: number): void
   (e: 'close', id: number): void
   (e: 'contextmenu', event: MouseEvent, tabId: number): void
+  (e: 'toggleToc'): void
 }>()
 </script>
 
@@ -36,16 +50,23 @@ defineEmits<{
   top: 57px;
   z-index: 90;
   display: flex;
-  gap: 2px;
+  align-items: flex-end;
+  gap: 8px;
   padding: 8px 24px 0;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border);
+}
+
+.tab-scroll {
+  display: flex;
+  gap: 2px;
   overflow-x: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  flex: 1;
 }
 
-.tab-bar::-webkit-scrollbar {
+.tab-scroll::-webkit-scrollbar {
   display: none;
 }
 
@@ -63,6 +84,7 @@ defineEmits<{
   color: var(--text-secondary);
   max-width: 180px;
   transition: all 0.15s ease;
+  flex-shrink: 0;
 }
 
 .tab:hover {
@@ -104,5 +126,30 @@ defineEmits<{
 .tab-close:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
+}
+
+.toc-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: var(--radius);
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.toc-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.toc-btn.active {
+  color: var(--accent);
+  background: var(--accent-light);
 }
 </style>

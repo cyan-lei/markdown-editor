@@ -1,15 +1,9 @@
 <template>
-  <div class="toc-panel" v-if="items.length > 0">
+  <div class="toc-panel">
     <div class="toc-header">
-      <span class="toc-title">大纲</span>
-      <button class="toc-toggle" @click="$emit('toggle')" :title="collapsed ? '展开' : '折叠'">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline v-if="collapsed" points="9 18 15 12 9 6"/>
-          <polyline v-else points="6 9 12 15 18 9"/>
-        </svg>
-      </button>
+      <span class="toc-title">目录</span>
     </div>
-    <div class="toc-list" v-show="!collapsed">
+    <div class="toc-list">
       <a
         v-for="item in items"
         :key="item.slug"
@@ -30,13 +24,11 @@ import type { TocItem } from '@/composables/useToc'
 
 defineProps<{
   items: TocItem[]
-  collapsed: boolean
   activeSlug: string
 }>()
 
 defineEmits<{
   (e: 'navigate', slug: string): void
-  (e: 'toggle'): void
 }>()
 </script>
 
@@ -47,12 +39,12 @@ defineEmits<{
   border-right: 1px solid var(--border);
   overflow: hidden;
   min-width: 0;
+  width: 240px;
 }
 
 .toc-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
@@ -64,30 +56,27 @@ defineEmits<{
   letter-spacing: 0.5px;
 }
 
-.toc-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border: none;
-  background: transparent;
-  color: var(--text-tertiary);
-  cursor: pointer;
-  border-radius: 4px;
-}
-
-.toc-toggle:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
 .toc-list {
   padding: 8px 0;
   max-height: 50vh;
   overflow-y: auto;
-  scrollbar-width: thin;
-  width: 240px;
+}
+
+.toc-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.toc-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.toc-list::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 3px;
+}
+
+.toc-list::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
 }
 
 .toc-item {

@@ -63,9 +63,11 @@
     <TabBar
       :tabs="tabs"
       :activeTabId="activeTabId"
+      :tocVisible="tocVisible"
       @switch="switchTab"
       @close="handleCloseTab"
       @contextmenu="handleTabContextMenu"
+      @toggleToc="tocVisible = !tocVisible"
     />
 
     <main class="main">
@@ -73,10 +75,8 @@
         <TableOfContents
           v-if="tocVisible && tocItems.length > 0"
           :items="tocItems"
-          :collapsed="tocCollapsed"
           :activeSlug="activeTocSlug"
           @navigate="handleTocNavigate"
-          @toggle="tocCollapsed = !tocCollapsed"
         />
         <EditorPanel
           ref="editorPanelRef"
@@ -216,7 +216,6 @@ const applyPreferences = () => {
 
 // --- TOC ---
 const tocVisible = ref(true)
-const tocCollapsed = ref(false)
 const activeTocSlug = ref('')
 
 const handleTocNavigate = (slug: string) => {
