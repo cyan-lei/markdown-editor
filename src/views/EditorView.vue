@@ -128,7 +128,7 @@
       :local="prefLocal"
       @update="updatePrefLocal"
       @confirm="applyPreferences"
-      @cancel="showPreferences = false"
+      @cancel="cancelPreferences"
     />
 
     <TabContextMenu
@@ -177,8 +177,8 @@ const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
 
 // --- Composables ---
-const { dividerPosition, startDrag } = useDividerDrag()
 const { preferences, reset: resetPrefs } = usePreferences()
+const { dividerPosition, startDrag } = useDividerDrag(20, 80, preferences.value.editorWidth)
 const { recentFiles, addRecent, removeRecent, clearRecent } = useRecentFiles()
 
 const {
@@ -211,6 +211,12 @@ const updatePrefLocal = (key: keyof Preferences, value: number) => {
 const applyPreferences = () => {
   preferences.value = { ...prefLocal.value }
   dividerPosition.value = prefLocal.value.editorWidth
+  showPreferences.value = false
+}
+
+// 取消时重置 prefLocal 为当前已保存的 preferences，避免未保存的修改残留
+const cancelPreferences = () => {
+  prefLocal.value = { ...preferences.value }
   showPreferences.value = false
 }
 
