@@ -92,7 +92,9 @@ defineExpose({
         .replace(/-+/g, '-')
         .trim()
       if (hSlug === slug) {
-        h.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        // 手动设置 scrollTop，避免 scrollIntoView 滚动祖先容器（导致目录消失）
+        const targetTop = (h as HTMLElement).offsetTop
+        previewRef.value.scrollTo({ top: targetTop, behavior: 'smooth' })
         break
       }
     }

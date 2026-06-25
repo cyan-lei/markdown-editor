@@ -10,8 +10,8 @@
         class="toc-item"
         :class="{ active: activeSlug === item.slug }"
         :style="{ paddingLeft: `${(item.level - 1) * 12 + 12}px` }"
-        href="#"
-        @click.prevent="$emit('navigate', item.slug)"
+        href="javascript:void(0)"
+        @click.stop.prevent="$emit('navigate', item.slug)"
       >
         {{ item.text }}
       </a>
