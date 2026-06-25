@@ -12,10 +12,12 @@ interface HistoryStack {
 }
 
 const MAX_HISTORY = 100
-const DEBOUNCE_MS = 500
+const DEBOUNCE_MS = 400
 
 const histories = new Map<number, HistoryStack>()
 const debounceTimers = new Map<number, ReturnType<typeof setTimeout>>()
+// 记录 debounce 中待 push 的内容
+const pendingContent = new Map<number, HistoryEntry>()
 
 function getStack(tabId: number): HistoryStack {
   if (!histories.has(tabId)) {
@@ -31,6 +33,7 @@ export function clearHistory(tabId: number) {
     clearTimeout(timer)
     debounceTimers.delete(tabId)
   }
+  pendingContent.delete(tabId)
 }
 
 export function useHistory(tabId: Ref<number | null>) {
@@ -47,17 +50,52 @@ export function useHistory(tabId: Ref<number | null>) {
     const id = tabId.value
     if (id === null) return
 
+    // 记录待 push 的内容
+    pendingContent.set(id, { content, selectionStart, selectionEnd })
+
     const existing = debounceTimers.get(id)
     if (existing) clearTimeout(existing)
 
     debounceTimers.set(id, setTimeout(() => {
       const stack = getStack(id)
-      stack.past.push({ content, selectionStart, selectionEnd })
-      if (stack.past.length > MAX_HISTORY) stack.past.shift()
-      stack.future = []
+      const entry = pendingContent.get(id)
+      if (entry) {
+        // 避免连续 push 相同内容
+        const last = stack.past[stack.past.length - 1]
+        if (!last || last.content !== entry.content) {
+          stack.past.push(entry)
+          if (stack.past.length > MAX_HISTORY) stack.past.shift()
+        }
+        stack.future = []
+        pendingContent.delete(id)
+      }
       updateFlags(id)
       debounceTimers.delete(id)
     }, DEBOUNCE_MS))
+  }
+
+  // flush：如果有 pending debounce，立即执行 push
+  const flush = () => {
+    const id = tabId.value
+    if (id === null) return
+    const timer = debounceTimers.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      debounceTimers.delete(id)
+      // 立即执行 pending push
+      const entry = pendingContent.get(id)
+      if (entry) {
+        const stack = getStack(id)
+        const last = stack.past[stack.past.length - 1]
+        if (!last || last.content !== entry.content) {
+          stack.past.push(entry)
+          if (stack.past.length > MAX_HISTORY) stack.past.shift()
+        }
+        stack.future = []
+        pendingContent.delete(id)
+        updateFlags(id)
+      }
+    }
   }
 
   const undo = (): HistoryEntry | null => {
@@ -65,18 +103,14 @@ export function useHistory(tabId: Ref<number | null>) {
     if (id === null) return null
     const stack = getStack(id)
 
-    const timer = debounceTimers.get(id)
-    if (timer) {
-      clearTimeout(timer)
-      debounceTimers.delete(id)
-    }
-
-    const entry = stack.past.pop()
-    if (!entry) return null
-    // undo 时不在此处压入 future，由调用方在获取 undo 结果前
-    // 通过 pushToFuture 保存当前状态
+    // 弹出当前状态
+    stack.past.pop()
+    // 返回前一个状态（past 栈顶），如果没有则返回空状态
+    const prev = stack.past[stack.past.length - 1]
     updateFlags(id)
-    return entry
+    if (prev) return prev
+    // past 为空，返回空状态
+    return { content: '', selectionStart: 0, selectionEnd: 0 }
   }
 
   const redo = (): HistoryEntry | null => {
@@ -118,6 +152,7 @@ export function useHistory(tabId: Ref<number | null>) {
     pushToPast,
     canUndo,
     canRedo,
-    clear
+    clear,
+    flush
   }
 }

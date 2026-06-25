@@ -28,24 +28,29 @@
       @replaceAll="search.replaceAll()"
       @close="closeSearch"
     />
-    <textarea
-      ref="textareaRef"
-      class="editor"
-      :value="modelValue"
-      :style="{ fontSize: fontSize ? `${fontSize}px` : undefined, lineHeight: lineHeight ?? undefined }"
-      @input="onInput"
-      @scroll="onScroll"
-      @keyup="updateCursor"
-      @click="updateCursor"
-      @select="updateCursor"
-      placeholder="开始编写您的Markdown..."
-    ></textarea>
+    <div class="editor-wrap">
+      <div class="line-numbers" ref="lineNumbersRef">{{ lineNumbersText }}</div>
+      <textarea
+        ref="textareaRef"
+        class="editor"
+        :value="modelValue"
+        :style="{ fontSize: fontSize ? `${fontSize}px` : undefined, lineHeight: lineHeight ?? undefined }"
+        @input="onInput"
+        @keydown="onKeydown"
+        @scroll="onScroll"
+        @keyup="updateCursor"
+        @click="updateCursor"
+        @select="updateCursor"
+        placeholder="开始编写您的Markdown..."
+      ></textarea>
+    </div>
     <StatusBar
       :line="cursorInfo.line"
       :col="cursorInfo.col"
       :wordCount="wordCount"
       :charCount="charCount"
       :selectedChars="cursorInfo.selectedChars"
+      :paragraphCount="paragraphCount"
     />
   </div>
 </template>
@@ -73,6 +78,13 @@ const emit = defineEmits<{
 }>()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const lineNumbersRef = ref<HTMLElement | null>(null)
+
+// 行号
+const lineNumbersText = computed(() => {
+  const lines = props.modelValue.split('\n').length
+  return Array.from({ length: lines }, (_, i) => i + 1).join('\n')
+})
 
 // --- Cursor tracking ---
 const cursorInfo = ref({ line: 1, col: 1, selectedChars: 0 })
@@ -97,6 +109,13 @@ const wordCount = computed(() => {
   const englishWords = text.match(/[a-zA-Z0-9]+/g)?.length || 0
   const chineseChars = text.match(/[\u4e00-\u9fa5]/g)?.length || 0
   return englishWords + chineseChars
+})
+
+// 段落数：非空行数
+const paragraphCount = computed(() => {
+  const text = props.modelValue.trim()
+  if (!text) return 0
+  return text.split(/\n\s*\n/).filter(p => p.trim().length > 0).length
 })
 
 // --- History ---
@@ -134,6 +153,8 @@ const openReplace = () => {
 
 const closeSearch = () => {
   searchVisible.value = false
+  // 焦点回到编辑器
+  requestAnimationFrame(() => textareaRef.value?.focus())
 }
 
 // --- Shortcuts ---
@@ -144,23 +165,22 @@ register('ctrl+i', (e) => { e.preventDefault(); insertFormat('italic') })
 register('ctrl+k', (e) => { e.preventDefault(); insertFormat('link') })
 register('ctrl+f', (e) => { e.preventDefault(); openSearch() })
 register('ctrl+h', (e) => { e.preventDefault(); openReplace() })
-register('ctrl+z', (e) => { e.preventDefault(); undo() })
-register('ctrl+y', (e) => { e.preventDefault(); redo() })
-register('ctrl+shift+z', (e) => { e.preventDefault(); redo() })
 
 // --- Undo/Redo ---
 const undo = () => {
   const el = textareaRef.value
   if (!el) return
+  // 先保存当前状态到 future（包括未 debounce 的最新输入）
   history.pushToFuture(el.value, el.selectionStart, el.selectionEnd)
+  // flush pending debounce，避免丢失
+  history.flush()
   const entry = history.undo()
   if (entry) {
     emit('update', entry.content)
-    requestAnimationFrame(() => {
-      el.value = entry.content
-      el.setSelectionRange(entry.selectionStart, entry.selectionEnd)
-      updateCursor()
-    })
+    // 直接设置，不用 requestAnimationFrame，避免被 Vue 重新渲染覆盖
+    el.value = entry.content
+    el.setSelectionRange(entry.selectionStart, entry.selectionEnd)
+    updateCursor()
   }
 }
 
@@ -171,11 +191,9 @@ const redo = () => {
   const entry = history.redo()
   if (entry) {
     emit('update', entry.content)
-    requestAnimationFrame(() => {
-      el.value = entry.content
-      el.setSelectionRange(entry.selectionStart, entry.selectionEnd)
-      updateCursor()
-    })
+    el.value = entry.content
+    el.setSelectionRange(entry.selectionStart, entry.selectionEnd)
+    updateCursor()
   }
 }
 
@@ -245,12 +263,47 @@ const insertFormat = (action: string) => {
   }
 
   emit('update', newValue)
+  // 格式化操作也记录到历史
+  history.push(newValue, newCursorStart, newCursorEnd)
   requestAnimationFrame(() => {
     el.value = newValue
     el.setSelectionRange(newCursorStart, newCursorEnd)
     el.focus()
     updateCursor()
   })
+}
+
+// --- 自动补全 ---
+const handleAutoComplete = (e: KeyboardEvent) => {
+  const el = textareaRef.value
+  if (!el) return
+
+  const pos = el.selectionStart
+  const value = el.value
+  const before = value.substring(0, pos)
+
+  // 输入 ``` 后回车 → 补全代码块
+  if (e.key === 'Enter' && /```\w*$/.test(before)) {
+    const match = before.match(/```(\w*)$/)
+    if (match) {
+      e.preventDefault()
+      const lang = match[1]
+      const insert = `\n\n\`\`\`${lang ? '' : ''}\n`
+      const newValue = value.substring(0, pos) + insert + value.substring(pos)
+      emit('update', newValue)
+      el.value = newValue
+      const cursorPos = pos + 1
+      el.setSelectionRange(cursorPos, cursorPos)
+      history.push(newValue, cursorPos, cursorPos)
+      updateCursor()
+      return
+    }
+  }
+
+  // 输入 | 后在表格行 → 自动补全列分隔
+  if (e.key === '|' && before.split('\n').pop()?.includes('|')) {
+    // 表格行已有一个 |，不再特殊处理
+  }
 }
 
 // --- Existing handlers ---
@@ -261,16 +314,42 @@ const onInput = (e: Event) => {
   updateCursor()
 }
 
+const onKeydown = (e: KeyboardEvent) => {
+  // 拦截撤销/重做，防止 textarea 原生行为冲突
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+    e.preventDefault()
+    undo()
+    return
+  }
+  if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+    e.preventDefault()
+    redo()
+    return
+  }
+  handleAutoComplete(e)
+}
+
 const onScroll = () => {
   const el = textareaRef.value
   if (el) {
     emit('scroll', el.scrollTop, el.scrollHeight, el.clientHeight)
+    // 同步行号滚动
+    if (lineNumbersRef.value) {
+      lineNumbersRef.value.scrollTop = el.scrollTop
+    }
   }
 }
 
-// Update cursor when tab changes
+// Update cursor when tab changes，并初始化历史记录
 watch(() => props.tabId, () => {
-  requestAnimationFrame(updateCursor)
+  requestAnimationFrame(() => {
+    updateCursor()
+    // 切换标签时，将当前内容作为历史初始状态（同步 push，不走 debounce）
+    const el = textareaRef.value
+    if (el) {
+      history.pushToPast(el.value, el.selectionStart, el.selectionEnd)
+    }
+  })
 })
 
 defineExpose({
@@ -323,6 +402,28 @@ defineExpose({
 .file-info {
   font-size: 12px;
   color: var(--text-tertiary);
+}
+
+.editor-wrap {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.line-numbers {
+  flex-shrink: 0;
+  padding: 16px 8px 16px 12px;
+  text-align: right;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+  user-select: none;
+  white-space: pre;
+  border-right: 1px solid var(--border);
 }
 
 .editor {

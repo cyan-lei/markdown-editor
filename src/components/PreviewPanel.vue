@@ -29,10 +29,25 @@ const processExtensions = async () => {
   if (previewRef.value) {
     try {
       await renderExtensions(previewRef.value)
+      // 给代码块添加复制按钮
+      addCopyButtons(previewRef.value)
     } catch (err) {
       console.error('Render extensions failed:', err)
     }
   }
+}
+
+// 给所有 pre 代码块添加复制按钮
+const addCopyButtons = (container: HTMLElement) => {
+  const pres = container.querySelectorAll('pre')
+  pres.forEach(pre => {
+    if (pre.querySelector('.code-copy-btn')) return
+    const btn = document.createElement('button')
+    btn.className = 'code-copy-btn'
+    btn.title = '复制代码'
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'
+    pre.appendChild(btn)
+  })
 }
 
 watch(() => props.html, () => {
@@ -58,9 +73,26 @@ const onScroll = () => {
   }
 }
 
-// Task list checkbox interactivity
+// Task list checkbox interactivity + 代码复制
 const handleClick = (e: MouseEvent) => {
   const target = e.target as HTMLElement
+
+  // 代码复制按钮
+  const copyBtn = target.closest('.code-copy-btn') as HTMLElement | null
+  if (copyBtn) {
+    const pre = copyBtn.closest('pre')
+    const code = pre?.querySelector('code')
+    if (code) {
+      navigator.clipboard?.writeText(code.textContent || '')
+      copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+      setTimeout(() => {
+        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'
+      }, 1500)
+    }
+    return
+  }
+
+  // Task list checkbox
   if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
     const allCheckboxes = previewRef.value?.querySelectorAll('input[type="checkbox"]')
     if (allCheckboxes) {
@@ -205,6 +237,40 @@ defineExpose({
   overflow-x: auto;
   margin: 16px 0;
   border: 1px solid var(--border);
+}
+
+.preview :deep(.code-copy-btn) {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--code-lang-bg);
+  color: var(--code-lang-text);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  z-index: 2;
+}
+
+.preview :deep(pre:hover .code-copy-btn) {
+  opacity: 1;
+}
+
+.preview :deep(.code-copy-btn:hover) {
+  background: var(--accent);
+  color: #fff;
+  opacity: 1;
+}
+
+/* 有语言标签时，复制按钮左移 */
+.preview :deep(pre[data-lang]) .code-copy-btn {
+  right: 60px;
 }
 
 .preview :deep(pre)::before {

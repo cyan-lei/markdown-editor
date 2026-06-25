@@ -24,7 +24,14 @@
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" @click="handleCancel" ref="cancelRef">取消</button>
-          <button class="btn-primary" @click="handleConfirm" ref="confirmRef">确定</button>
+          <button
+            v-if="tertiaryLabel"
+            class="btn-secondary"
+            :class="{ 'btn-danger': tertiaryVariant === 'danger' }"
+            @click="handleTertiary"
+            ref="tertiaryRef"
+          >{{ tertiaryLabel }}</button>
+          <button class="btn-primary" @click="handleConfirm" ref="confirmRef">{{ confirmLabel }}</button>
         </div>
       </div>
     </div>
@@ -38,24 +45,30 @@ const props = defineProps<{
   visible: boolean
   title?: string
   message?: string
+  confirmLabel?: string
+  tertiaryLabel?: string
+  tertiaryVariant?: 'danger'
 }>()
 
 const emit = defineEmits<{
   (e: 'confirm'): void
   (e: 'cancel'): void
+  (e: 'tertiary'): void
 }>()
 
 const modalRef = ref<HTMLElement | null>(null)
 const cancelRef = ref<HTMLButtonElement | null>(null)
 const confirmRef = ref<HTMLButtonElement | null>(null)
+const tertiaryRef = ref<HTMLButtonElement | null>(null)
 let previousFocus: HTMLElement | null = null
 
 const handleConfirm = () => emit('confirm')
 const handleCancel = () => emit('cancel')
+const handleTertiary = () => emit('tertiary')
 
 const trapFocus = (e: KeyboardEvent) => {
   if (e.key !== 'Tab') return
-  const focusable = [cancelRef.value, confirmRef.value].filter(Boolean) as HTMLElement[]
+  const focusable = [cancelRef.value, tertiaryRef.value, confirmRef.value].filter(Boolean) as HTMLElement[]
   if (focusable.length === 0) return
 
   const first = focusable[0]
@@ -138,5 +151,16 @@ onUnmounted(() => {
   justify-content: flex-end;
   gap: 12px;
   border-top: 1px solid var(--border);
+}
+
+.btn-danger {
+  color: #ef4444;
+  border-color: #ef4444;
+}
+
+.btn-danger:hover {
+  background: #ef4444;
+  color: #fff;
+  border-color: #ef4444;
 }
 </style>

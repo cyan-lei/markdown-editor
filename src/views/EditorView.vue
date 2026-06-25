@@ -41,7 +41,7 @@
           新建
         </button>
         <div class="export-wrapper">
-          <button class="btn-primary" @click="showExportMenu = !showExportMenu" aria-label="导出">
+          <button class="btn-primary" @click.stop="showExportMenu = !showExportMenu" aria-label="导出">
             <AppIcon name="download" :size="16" />
             导出
           </button>
@@ -108,14 +108,18 @@
     </main>
 
     <ConfirmModal
-      :visible="showSaveModal"
-      title="保存文件"
-      message="确定要保存文件吗？"
-      @confirm="confirmSave"
-      @cancel="showSaveModal = false"
+      :visible="showCloseConfirm"
+      title="未保存的更改"
+      :message="`「${pendingCloseTab?.name || ''}」有未保存的更改，是否在关闭前保存？`"
+      confirmLabel="保存"
+      tertiaryLabel="不保存"
+      tertiaryVariant="danger"
+      @confirm="handleCloseSave"
+      @tertiary="handleCloseDiscard"
+      @cancel="handleCloseCancel"
     />
 
-    <ConfirmModal
+    <PreferencesModal
       :visible="showDraftModal"
       title="恢复草稿"
       :message="`发现 ${drafts.length} 个未保存的草稿，是否恢复？`"
@@ -138,22 +142,32 @@
       @action="handleContextAction"
       @close="contextMenu.visible = false"
     />
+
+    <ShortcutsModal
+      :visible="showShortcuts"
+      @close="showShortcuts = false"
+    />
+
+    <ToastContainer />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import type { Tab } from '@/types'
 import AppHeader from '@/components/AppHeader.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import TabBar from '@/components/TabBar.vue'
 import EditorPanel from '@/components/EditorPanel.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
+import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import PreferencesModal from '@/components/PreferencesModal.vue'
 import TableOfContents from '@/components/TableOfContents.vue'
 import TabContextMenu from '@/components/TabContextMenu.vue'
+import ToastContainer from '@/components/ToastContainer.vue'
 import { useEditor } from '@/composables/useEditor'
 import { useDividerDrag } from '@/composables/useDividerDrag'
 import { useShortcuts } from '@/composables/useShortcuts'
@@ -161,17 +175,19 @@ import { useAutoSave, getDrafts, clearDrafts } from '@/composables/useAutoSave'
 import { useRecentFiles } from '@/composables/useRecentFiles'
 import { usePreferences, type Preferences } from '@/composables/usePreferences'
 import { useToc } from '@/composables/useToc'
+import { useToast } from '@/composables/useToast'
 import { fileService } from '@/services/fileService'
 import { themeService, themeOptions } from '@/services/themeService'
-import { editorService } from '@/services/editorService'
 import { clearHistory } from '@/composables/useHistory'
 
 // --- Refs ---
-const showSaveModal = ref(false)
 const showPreferences = ref(false)
 const showExportMenu = ref(false)
 const showDraftModal = ref(false)
 const showThemeMenu = ref(false)
+const showShortcuts = ref(false)
+const showCloseConfirm = ref(false)
+const pendingCloseTab = ref<Tab | null>(null)
 const drafts = ref(getDrafts())
 const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
@@ -180,6 +196,7 @@ const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
 const { preferences, reset: resetPrefs } = usePreferences()
 const { dividerPosition, startDrag } = useDividerDrag(20, 80, preferences.value.editorWidth)
 const { recentFiles, addRecent, removeRecent, clearRecent } = useRecentFiles()
+const { showToast } = useToast()
 
 const {
   tabs,
@@ -282,26 +299,76 @@ const handleSave = async () => {
 
   if (tab.fileHandle) {
     const success = await fileService.saveFile(tab)
-    if (success) markSaved()
+    if (success) {
+      markSaved()
+      showToast('保存成功', 'success')
+    } else {
+      showToast('保存失败', 'error')
+    }
   } else {
-    await fileService.saveAsFile(tab)
+    const result = await fileService.saveAsFile(tab)
+    if (result === true) {
+      markSaved()
+      showToast('保存成功', 'success')
+    } else if (result === false) {
+      showToast('保存失败', 'error')
+    }
+    // result === null 表示用户取消，不弹窗
   }
-}
-
-const confirmSave = async () => {
-  showSaveModal.value = false
-  const tab = tabs.value.find(t => t.id === activeTabId.value)
-  if (!tab) return
-
-  const success = await fileService.saveFile(tab)
-  if (success) markSaved()
 }
 
 const handleCloseTab = (id: number) => {
   const tab = tabs.value.find(t => t.id === id)
-  if (!tab || !editorService.closeTabWithCheck(tab)) return
-  clearHistory(id)
-  closeTab(id)
+  if (!tab) return
+  // 未修改直接关闭
+  if (!tab.modified) {
+    clearHistory(id)
+    closeTab(id)
+    return
+  }
+  // 有未保存更改 → 弹窗确认
+  pendingCloseTab.value = tab
+  showCloseConfirm.value = true
+}
+
+// 关闭确认弹窗：保存
+const handleCloseSave = async () => {
+  const tab = pendingCloseTab.value
+  if (!tab) return
+  showCloseConfirm.value = false
+
+  let result: boolean | null = false
+  if (tab.fileHandle) {
+    result = await fileService.saveFile(tab)
+  } else {
+    result = await fileService.saveAsFile(tab)
+  }
+
+  if (result === true) {
+    markSaved()
+    showToast('保存成功', 'success')
+    clearHistory(tab.id)
+    closeTab(tab.id)
+  } else if (result === false) {
+    showToast('保存失败', 'error')
+  }
+  // result === null 表示用户取消保存，不关闭标签
+}
+
+// 关闭确认弹窗：不保存（丢弃更改）
+const handleCloseDiscard = () => {
+  const tab = pendingCloseTab.value
+  if (!tab) return
+  showCloseConfirm.value = false
+  clearHistory(tab.id)
+  closeTab(tab.id)
+  pendingCloseTab.value = null
+}
+
+// 关闭确认弹窗：取消
+const handleCloseCancel = () => {
+  showCloseConfirm.value = false
+  pendingCloseTab.value = null
 }
 
 const handleExport = (format: 'md' | 'html' | 'pdf') => {
@@ -311,10 +378,13 @@ const handleExport = (format: 'md' | 'html' | 'pdf') => {
 
   if (format === 'md') {
     fileService.downloadFile(tab)
+    showToast(`已导出 ${tab.name}`, 'success')
   } else if (format === 'html') {
     fileService.exportHTML(tab)
+    showToast(`已导出 ${tab.name.replace(/\.md$/, '.html')}`, 'success')
   } else if (format === 'pdf') {
     fileService.exportPDF(tab)
+    showToast(`已导出 ${tab.name.replace(/\.md$/, '.pdf')}`, 'success')
   }
 }
 
@@ -348,18 +418,14 @@ const handleContextAction = (action: string) => {
     handleCloseTab(tabId)
   } else if (action === 'closeOthers') {
     tabs.value.filter(t => t.id !== tabId).forEach(t => {
-      if (editorService.closeTabWithCheck(t)) {
-        clearHistory(t.id)
-        closeTab(t.id)
-      }
+      clearHistory(t.id)
+      closeTab(t.id)
     })
   } else if (action === 'closeRight') {
     const index = tabs.value.findIndex(t => t.id === tabId)
     tabs.value.slice(index + 1).forEach(t => {
-      if (editorService.closeTabWithCheck(t)) {
-        clearHistory(t.id)
-        closeTab(t.id)
-      }
+      clearHistory(t.id)
+      closeTab(t.id)
     })
   } else if (action === 'copyName') {
     navigator.clipboard?.writeText(tab.name)
@@ -372,6 +438,7 @@ const restoreDrafts = () => {
   drafts.value.forEach(draft => {
     addTab(createTab(draft.name, draft.content))
   })
+  showToast(`已恢复 ${drafts.value.length} 个草稿`, 'info')
   clearDrafts()
 }
 
@@ -409,6 +476,7 @@ register('ctrl+w', (e) => {
 })
 register('ctrl+tab', (e) => { e.preventDefault(); switchToNextTab() })
 register('ctrl+s', (e) => { e.preventDefault(); handleSave() })
+register('ctrl+/', (e) => { e.preventDefault(); showShortcuts.value = true })
 
 // --- Close menus on outside click ---
 const handleOutsideClick = () => {

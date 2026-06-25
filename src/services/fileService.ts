@@ -80,7 +80,7 @@ export class FileService {
     }
   }
 
-  async saveAsFile(tab: Tab): Promise<boolean> {
+  async saveAsFile(tab: Tab): Promise<boolean | null> {
     try {
       const fileHandle = await window.showSaveFilePicker({
         suggestedName: tab.name,
@@ -100,9 +100,11 @@ export class FileService {
 
       return true
     } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        this.fallbackDownload(tab)
+      if ((err as Error).name === 'AbortError') {
+        // 用户主动取消，不算失败
+        return null
       }
+      this.fallbackDownload(tab)
       return false
     }
   }
