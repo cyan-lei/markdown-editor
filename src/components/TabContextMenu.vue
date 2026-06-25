@@ -20,7 +20,19 @@
         <button class="menu-item" @click="emitAction('closeRight')">
           关闭右侧
         </button>
+        <button class="menu-item" @click="emitAction('closeLeft')">
+          关闭左侧
+        </button>
+        <button class="menu-item" @click="emitAction('closeAll')">
+          关闭所有
+        </button>
         <hr class="menu-sep" />
+        <button class="menu-item" @click="emitAction('togglePin')">
+          {{ isPinned ? '取消固定' : '固定标签' }}
+        </button>
+        <button class="menu-item" @click="emitAction('duplicate')">
+          复制标签
+        </button>
         <button class="menu-item" @click="emitAction('copyName')">
           复制文件名
         </button>
@@ -34,6 +46,7 @@ defineProps<{
   visible: boolean
   x: number
   y: number
+  isPinned?: boolean
 }>()
 
 const emit = defineEmits<{

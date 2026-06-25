@@ -9,6 +9,12 @@
     <span class="status-item">段落: {{ paragraphCount }}</span>
     <span class="status-sep">|</span>
     <span class="status-item">⏱ {{ readingTime }}</span>
+    <template v-if="wordGoal > 0">
+      <span class="status-sep">|</span>
+      <span class="status-item" :class="{ 'goal-done': progress >= 100 }">
+        目标: {{ wordCount }}/{{ wordGoal }} ({{ progress }}%)
+      </span>
+    </template>
     <template v-if="selectedChars > 0">
       <span class="status-sep">|</span>
       <span class="status-item">已选: {{ selectedChars }} 字符</span>
@@ -26,6 +32,7 @@ const props = defineProps<{
   charCount: number
   selectedChars: number
   paragraphCount: number
+  wordGoal?: number
 }>()
 
 // 预计阅读时间（中文约 300 字/分钟，英文约 200 词/分钟）
@@ -35,6 +42,11 @@ const readingTime = computed(() => {
   const minutes = Math.ceil(words / 250)
   if (minutes < 1) return '< 1 分钟'
   return `${minutes} 分钟`
+})
+
+const progress = computed(() => {
+  if (!props.wordGoal || props.wordGoal === 0) return 0
+  return Math.min(100, Math.round((props.wordCount / props.wordGoal) * 100))
 })
 </script>
 
@@ -53,5 +65,10 @@ const readingTime = computed(() => {
 
 .status-sep {
   color: var(--border);
+}
+
+.goal-done {
+  color: #10b981;
+  font-weight: 600;
 }
 </style>

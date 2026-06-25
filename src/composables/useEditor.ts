@@ -74,6 +74,14 @@ export function useEditor() {
     }
   }
 
+  const moveTab = (fromId: number, toId: number) => {
+    const fromIndex = tabs.value.findIndex(t => t.id === fromId)
+    const toIndex = tabs.value.findIndex(t => t.id === toId)
+    if (fromIndex === -1 || toIndex === -1) return
+    const [moved] = tabs.value.splice(fromIndex, 1)
+    tabs.value.splice(toIndex, 0, moved)
+  }
+
   return {
     tabs,
     activeTabId,
@@ -88,6 +96,7 @@ export function useEditor() {
     updateContent,
     markSaved,
     createTab,
-    addTab
+    addTab,
+    moveTab
   }
 }

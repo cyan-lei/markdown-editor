@@ -13,6 +13,11 @@
         href="javascript:void(0)"
         @click.stop.prevent="$emit('navigate', item.slug)"
       >
+        <span
+          v-if="item.level > 1"
+          class="toc-indent-line"
+          :style="{ left: `${(item.level - 2) * 12 + 6}px` }"
+        ></span>
         {{ item.text }}
       </a>
     </div>
@@ -81,6 +86,7 @@ defineEmits<{
 
 .toc-item {
   display: block;
+  position: relative;
   padding: 5px 12px;
   font-size: 13px;
   color: var(--text-secondary);
@@ -90,6 +96,15 @@ defineEmits<{
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.toc-indent-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
 }
 
 .toc-item:hover {

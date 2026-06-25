@@ -1,16 +1,31 @@
 <template>
   <div class="search-bar">
     <div class="search-row">
-      <input
-        class="search-input"
-        type="text"
-        :value="searchQuery"
-        @input="$emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
-        @keydown.enter.prevent="$emit('next')"
-        @keydown.esc.prevent="$emit('close')"
-        placeholder="搜索..."
-        ref="searchInputRef"
-      />
+      <div class="search-input-wrap">
+        <input
+          class="search-input"
+          type="text"
+          :value="searchQuery"
+          @input="$emit('update:searchQuery', ($event.target as HTMLInputElement).value)"
+          @keydown.enter.prevent="$emit('next')"
+          @keydown.esc.prevent="$emit('close')"
+          @focus="showHistory = true"
+          placeholder="搜索..."
+          ref="searchInputRef"
+        />
+        <div class="search-history" v-if="showHistory && history.length > 0" @click.stop>
+          <div class="history-header">
+            <span>搜索历史</span>
+            <button class="history-clear" @click="$emit('clearHistory'); showHistory = false">清空</button>
+          </div>
+          <button
+            v-for="item in history"
+            :key="item"
+            class="history-item"
+            @click="$emit('update:searchQuery', item); $emit('next'); showHistory = false"
+          >{{ item }}</button>
+        </div>
+      </div>
       <button
         class="search-toggle"
         :class="{ active: caseSensitive }"
@@ -46,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 defineProps<{
   mode: 'search' | 'replace'
@@ -55,6 +70,7 @@ defineProps<{
   caseSensitive: boolean
   matchCount: number
   currentMatch: number
+  history: string[]
 }>()
 
 defineEmits<{
@@ -67,12 +83,18 @@ defineEmits<{
   (e: 'replace'): void
   (e: 'replaceAll'): void
   (e: 'close'): void
+  (e: 'clearHistory'): void
 }>()
 
 const searchInputRef = ref<HTMLInputElement | null>(null)
+const showHistory = ref(false)
 
 onMounted(() => {
   searchInputRef.value?.focus()
+})
+
+onUnmounted(() => {
+  showHistory.value = false
 })
 </script>
 
@@ -107,6 +129,70 @@ onMounted(() => {
 
 .search-input:focus {
   border-color: var(--accent);
+}
+
+.search-input-wrap {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.search-history {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 2px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border);
+}
+
+.history-clear {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.history-clear:hover {
+  color: var(--accent);
+}
+
+.history-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-item:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .search-toggle {

@@ -129,7 +129,7 @@ export class FileService {
     }
   }
 
-  exportHTML(tab: Tab): void {
+  exportHTML(tab: Tab, customCss?: string): void {
     const html = renderMarkdown(tab.content)
     const fullHTML = `<!DOCTYPE html>
 <html lang="zh">
@@ -148,6 +148,7 @@ table { border-collapse: collapse; width: 100%; }
 th, td { border: 1px solid #e5e5e5; padding: 10px 14px; }
 th { background: #f5f5f5; }
 img { max-width: 100%; }
+${customCss || ''}
 </style>
 </head>
 <body>
@@ -166,7 +167,7 @@ ${html}
     setTimeout(() => URL.revokeObjectURL(url), 100)
   }
 
-  exportPDF(tab: Tab): void {
+  exportPDF(tab: Tab, customCss?: string): void {
     const html = renderMarkdown(tab.content)
     const printWindow = window.open('', '_blank')
     if (!printWindow) return
@@ -188,6 +189,7 @@ th, td { border: 1px solid #e5e5e5; padding: 10px 14px; }
 th { background: #f5f5f5; }
 img { max-width: 100%; }
 @media print { body { margin: 0; } }
+${customCss || ''}
 </style>
 </head>
 <body>
@@ -197,6 +199,41 @@ ${html}
     printWindow.document.close()
     printWindow.focus()
     setTimeout(() => printWindow.print(), 500)
+  }
+
+  exportOutline(tab: Tab): void {
+    const lines = tab.content.split('\n')
+    const outline: string[] = []
+    let inCodeBlock = false
+
+    for (const line of lines) {
+      if (line.trim().startsWith('```')) {
+        inCodeBlock = !inCodeBlock
+        continue
+      }
+      if (inCodeBlock) continue
+      const match = line.match(/^(#{1,6})\s+(.+)/)
+      if (match) {
+        const level = match[1].length
+        const text = match[2].replace(/[#*`_~]/g, '').trim()
+        const indent = '  '.repeat(level - 1)
+        outline.push(`${indent}- ${text}`)
+      }
+    }
+
+    const content = outline.length > 0
+      ? `# ${tab.name.replace(/\.md$/, '')} — 目录\n\n${outline.join('\n')}\n`
+      : `# ${tab.name.replace(/\.md$/, '')} — 目录\n\n（无标题）\n`
+
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = tab.name.replace(/\.md$/, '-outline.md') || 'outline.md'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 100)
   }
 
   private fallbackDownload(tab: Tab): void {

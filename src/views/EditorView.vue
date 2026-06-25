@@ -1,5 +1,5 @@
 <template>
-  <div class="editor-view" @dragover.prevent @drop.prevent="handleDrop">
+  <div class="editor-view" :class="{ 'focus-mode': focusMode }" @dragover.prevent @drop.prevent="handleDrop">
     <AppHeader>
       <template #actions>
         <div class="theme-switcher" @click.stop>
@@ -61,13 +61,15 @@
     </AppHeader>
 
     <TabBar
-      :tabs="tabs"
+      :tabs="sortedTabs"
       :activeTabId="activeTabId"
       :tocVisible="tocVisible"
       @switch="switchTab"
       @close="handleCloseTab"
       @contextmenu="handleTabContextMenu"
       @toggleToc="tocVisible = !tocVisible"
+      @togglePin="handleTogglePin"
+      @reorder="handleReorder"
     />
 
     <main class="main">
@@ -85,7 +87,11 @@
           :tabId="activeTabId!"
           :fontSize="preferences.fontSize"
           :lineHeight="preferences.lineHeight"
+          :editorMode="preferences.editorMode"
+          :wordGoal="preferences.wordGoal"
           @update="updateContent"
+          @save="handleSave"
+          @close="handleCloseTab(activeTabId!)"
           :style="{ flex: `0 0 ${dividerPosition}%` }"
           @scroll="handleEditorScroll"
         />
@@ -95,6 +101,8 @@
           :html="previewHtml"
           :style="{ flex: `0 0 ${100 - dividerPosition}%` }"
           @toggleTask="handleToggleTask"
+          @tableAction="handleTableAction"
+          @scroll="handlePreviewScroll"
         />
       </template>
       <EmptyState
@@ -139,6 +147,7 @@
       :visible="contextMenu.visible"
       :x="contextMenu.x"
       :y="contextMenu.y"
+      :isPinned="contextMenuPinned"
       @action="handleContextAction"
       @close="contextMenu.visible = false"
     />
@@ -146,6 +155,19 @@
     <ShortcutsModal
       :visible="showShortcuts"
       @close="showShortcuts = false"
+    />
+
+    <TemplateModal
+      :visible="showTemplateModal"
+      @select="handleSelectTemplate"
+      @close="showTemplateModal = false"
+    />
+
+    <GlobalSearchModal
+      :visible="showGlobalSearch"
+      :tabs="tabs"
+      @navigate="handleGlobalSearchNavigate"
+      @close="showGlobalSearch = false"
     />
 
     <ToastContainer />
@@ -168,6 +190,8 @@ import PreferencesModal from '@/components/PreferencesModal.vue'
 import TableOfContents from '@/components/TableOfContents.vue'
 import TabContextMenu from '@/components/TabContextMenu.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
+import TemplateModal, { type DocTemplate } from '@/components/TemplateModal.vue'
+import GlobalSearchModal from '@/components/GlobalSearchModal.vue'
 import { useEditor } from '@/composables/useEditor'
 import { useDividerDrag } from '@/composables/useDividerDrag'
 import { useShortcuts } from '@/composables/useShortcuts'
@@ -188,6 +212,9 @@ const showThemeMenu = ref(false)
 const showShortcuts = ref(false)
 const showCloseConfirm = ref(false)
 const pendingCloseTab = ref<Tab | null>(null)
+const focusMode = ref(false)
+const showTemplateModal = ref(false)
+const showGlobalSearch = ref(false)
 const drafts = ref(getDrafts())
 const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
@@ -206,23 +233,43 @@ const {
   charCount,
   hasTabs,
   hasUnsavedChanges,
-  newFile,
   switchTab,
   closeTab,
   updateContent,
   markSaved,
   createTab,
-  addTab
+  addTab,
+  moveTab
 } = useEditor()
 
 const { toc: tocItems } = useToc(activeTabContent)
+
+// 固定标签排序：pinned 标签排在前面，内部保持原有顺序
+const sortedTabs = computed(() => {
+  const pinned = tabs.value.filter(t => t.pinned)
+  const unpinned = tabs.value.filter(t => !t.pinned)
+  return [...pinned, ...unpinned]
+})
+
+// 切换标签固定状态
+const handleTogglePin = (id: number) => {
+  const tab = tabs.value.find(t => t.id === id)
+  if (tab) {
+    tab.pinned = !tab.pinned
+  }
+}
+
+// 拖拽排序
+const handleReorder = (fromId: number, toId: number) => {
+  moveTab(fromId, toId)
+}
 
 // --- Auto-save ---
 const { start: startAutoSave, stop: stopAutoSave } = useAutoSave(tabs)
 
 // --- Preferences local state ---
 const prefLocal = ref<Preferences>({ ...preferences.value })
-const updatePrefLocal = (key: keyof Preferences, value: number) => {
+const updatePrefLocal = (key: keyof Preferences, value: number | string) => {
   prefLocal.value = { ...prefLocal.value, [key]: value }
 }
 const applyPreferences = () => {
@@ -246,10 +293,27 @@ const handleTocNavigate = (slug: string) => {
   previewPanelRef.value?.scrollToHeading(slug)
 }
 
-// --- Editor scroll sync ---
+// --- Editor scroll sync (双向) ---
+// 锁防止循环触发：编辑器滚动→同步预览→预览滚动事件→同步编辑器→...
+let isScrolling = false
+
 const handleEditorScroll = (scrollTop: number, scrollHeight: number, clientHeight: number) => {
+  if (isScrolling) return
+  isScrolling = true
   const ratio = scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight)
   previewPanelRef.value?.setScrollRatio(ratio)
+  requestAnimationFrame(() => { isScrolling = false })
+}
+
+const handlePreviewScroll = (scrollTop: number, scrollHeight: number, clientHeight: number) => {
+  if (isScrolling) return
+  isScrolling = true
+  const ratio = scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight)
+  editorPanelRef.value?.setScrollRatio(ratio)
+  // 更新 TOC 高亮
+  const slug = previewPanelRef.value?.getActiveHeadingSlug()
+  if (slug) activeTocSlug.value = slug
+  requestAnimationFrame(() => { isScrolling = false })
 }
 
 // --- Task list toggle ---
@@ -273,8 +337,73 @@ const handleToggleTask = (checkboxIndex: number) => {
   }
 }
 
+// --- 表格可视化编辑 ---
+const handleTableAction = (action: 'addRow' | 'addCol' | 'delRow' | 'delCol', tableIndex: number) => {
+  const tab = tabs.value.find(t => t.id === activeTabId.value)
+  if (!tab) return
+  const lines = tab.content.split('\n')
+  // 找到第 tableIndex 个表格的行范围
+  let tableCount = -1
+  let tableStart = -1
+  let tableEnd = -1
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].match(/^\|.*\|/)) {
+      if (tableStart === -1) {
+        tableCount++
+        if (tableCount === tableIndex) tableStart = i
+      }
+    } else {
+      if (tableStart !== -1) {
+        tableEnd = i - 1
+        break
+      }
+    }
+  }
+  if (tableStart === -1) return
+  if (tableEnd === -1) tableEnd = lines.length - 1
+
+  // 确保跳过分隔行（第二行是 |---|---|）
+  const separatorLine = tableStart + 1
+  const dataStart = separatorLine + 1
+  const colCount = lines[tableStart].split('|').filter((_, i, a) => i > 0 && i < a.length - 1).length
+
+  if (action === 'addRow') {
+    const newRow = '| ' + Array(colCount).fill('内容').join(' | ') + ' |'
+    lines.splice(tableEnd + 1, 0, newRow)
+  } else if (action === 'addCol') {
+    for (let i = tableStart; i <= tableEnd; i++) {
+      const cells = lines[i].split('|')
+      if (i === separatorLine) {
+        cells.splice(cells.length - 1, 0, ' --- ')
+      } else {
+        cells.splice(cells.length - 1, 0, ' 内容 ')
+      }
+      lines[i] = cells.join('|')
+    }
+  } else if (action === 'delRow') {
+    if (tableEnd > dataStart) {
+      lines.splice(tableEnd, 1)
+    }
+  } else if (action === 'delCol') {
+    if (colCount > 1) {
+      for (let i = tableStart; i <= tableEnd; i++) {
+        const cells = lines[i].split('|')
+        cells.splice(cells.length - 2, 1)
+        lines[i] = cells.join('|')
+      }
+    }
+  }
+
+  updateContent(lines.join('\n'))
+}
+
 // --- File operations ---
-const handleNewFile = () => newFile()
+const handleNewFile = () => { showTemplateModal.value = true }
+
+const handleSelectTemplate = (tpl: DocTemplate) => {
+  showTemplateModal.value = false
+  addTab(createTab(tpl.fileName, tpl.content))
+}
 
 const handleOpenFiles = async () => {
   const newTabs = await fileService.openFiles()
@@ -320,6 +449,11 @@ const handleSave = async () => {
 const handleCloseTab = (id: number) => {
   const tab = tabs.value.find(t => t.id === id)
   if (!tab) return
+  // 固定标签不允许关闭
+  if (tab.pinned) {
+    showToast('已固定的标签无法关闭，请先取消固定', 'info')
+    return
+  }
   // 未修改直接关闭
   if (!tab.modified) {
     clearHistory(id)
@@ -371,7 +505,7 @@ const handleCloseCancel = () => {
   pendingCloseTab.value = null
 }
 
-const handleExport = (format: 'md' | 'html' | 'pdf') => {
+const handleExport = (format: 'md' | 'html' | 'pdf' | 'outline') => {
   showExportMenu.value = false
   const tab = tabs.value.find(t => t.id === activeTabId.value)
   if (!tab) return
@@ -380,11 +514,14 @@ const handleExport = (format: 'md' | 'html' | 'pdf') => {
     fileService.downloadFile(tab)
     showToast(`已导出 ${tab.name}`, 'success')
   } else if (format === 'html') {
-    fileService.exportHTML(tab)
+    fileService.exportHTML(tab, preferences.value.customCss)
     showToast(`已导出 ${tab.name.replace(/\.md$/, '.html')}`, 'success')
   } else if (format === 'pdf') {
-    fileService.exportPDF(tab)
+    fileService.exportPDF(tab, preferences.value.customCss)
     showToast(`已导出 ${tab.name.replace(/\.md$/, '.pdf')}`, 'success')
+  } else if (format === 'outline') {
+    fileService.exportOutline(tab)
+    showToast(`已导出 ${tab.name.replace(/\.md$/, '-outline.md')}`, 'success')
   }
 }
 
@@ -404,6 +541,10 @@ const handleDrop = async (e: DragEvent) => {
 
 // --- Tab context menu ---
 const contextMenu = ref({ visible: false, x: 0, y: 0, tabId: 0 })
+const contextMenuPinned = computed(() => {
+  const tab = tabs.value.find(t => t.id === contextMenu.value.tabId)
+  return tab?.pinned ?? false
+})
 
 const handleTabContextMenu = (e: MouseEvent, tabId: number) => {
   contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, tabId }
@@ -417,16 +558,34 @@ const handleContextAction = (action: string) => {
   if (action === 'close') {
     handleCloseTab(tabId)
   } else if (action === 'closeOthers') {
-    tabs.value.filter(t => t.id !== tabId).forEach(t => {
+    tabs.value.filter(t => t.id !== tabId && !t.pinned).forEach(t => {
       clearHistory(t.id)
       closeTab(t.id)
     })
   } else if (action === 'closeRight') {
     const index = tabs.value.findIndex(t => t.id === tabId)
-    tabs.value.slice(index + 1).forEach(t => {
+    tabs.value.slice(index + 1).filter(t => !t.pinned).forEach(t => {
       clearHistory(t.id)
       closeTab(t.id)
     })
+  } else if (action === 'closeLeft') {
+    const index = tabs.value.findIndex(t => t.id === tabId)
+    tabs.value.slice(0, index).filter(t => !t.pinned).forEach(t => {
+      clearHistory(t.id)
+      closeTab(t.id)
+    })
+  } else if (action === 'closeAll') {
+    tabs.value.filter(t => !t.pinned).forEach(t => {
+      clearHistory(t.id)
+      closeTab(t.id)
+    })
+  } else if (action === 'togglePin') {
+    handleTogglePin(tabId)
+  } else if (action === 'duplicate') {
+    const dupTab = createTab(tab.name.replace(/\.md$/, '-copy.md'), tab.content, null)
+    dupTab.modified = true
+    addTab(dupTab)
+    showToast('已复制标签', 'success')
   } else if (action === 'copyName') {
     navigator.clipboard?.writeText(tab.name)
   }
@@ -455,6 +614,12 @@ const switchToNextTab = () => {
   switchTab(tabs.value[nextIndex].id)
 }
 
+// --- 全局搜索导航 ---
+const handleGlobalSearchNavigate = (tabId: number, _line: number) => {
+  showGlobalSearch.value = false
+  switchTab(tabId)
+}
+
 // --- beforeunload ---
 const handleBeforeUnload = (e: BeforeUnloadEvent) => {
   if (hasUnsavedChanges.value) {
@@ -477,6 +642,8 @@ register('ctrl+w', (e) => {
 register('ctrl+tab', (e) => { e.preventDefault(); switchToNextTab() })
 register('ctrl+s', (e) => { e.preventDefault(); handleSave() })
 register('ctrl+/', (e) => { e.preventDefault(); showShortcuts.value = true })
+register('ctrl+shift+f', (e) => { e.preventDefault(); focusMode.value = !focusMode.value })
+register('ctrl+shift+h', (e) => { e.preventDefault(); showGlobalSearch.value = true })
 
 // --- Close menus on outside click ---
 const handleOutsideClick = () => {
@@ -505,9 +672,47 @@ onUnmounted(() => {
 watch(() => preferences.value.editorWidth, (val) => {
   dividerPosition.value = val
 })
+
+// 注入自定义 CSS 到预览区
+watch(() => preferences.value.customCss, (css) => {
+  let styleEl = document.getElementById('user-custom-css') as HTMLStyleElement | null
+  if (!css) {
+    styleEl?.remove()
+    return
+  }
+  if (!styleEl) {
+    styleEl = document.createElement('style')
+    styleEl.id = 'user-custom-css'
+    document.head.appendChild(styleEl)
+  }
+  styleEl.textContent = css
+}, { immediate: true })
 </script>
 
 <style>
+/* 焦点模式：隐藏 header、tabBar、目录、分隔条、预览区，编辑器全屏 */
+.focus-mode :deep(.header),
+.focus-mode :deep(.tab-bar),
+.focus-mode :deep(.toc-panel),
+.focus-mode .divider {
+  display: none !important;
+}
+
+.focus-mode .main {
+  padding: 0;
+}
+
+.focus-mode :deep(.editor-panel) {
+  flex: 1 1 100% !important;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+.focus-mode :deep(.preview-panel) {
+  display: none !important;
+}
+
 .export-wrapper {
   position: relative;
 }

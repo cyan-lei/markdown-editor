@@ -13,6 +13,43 @@ export function useSearch(
 
   let matches: { start: number; end: number }[] = []
 
+  // 搜索历史
+  const SEARCH_HISTORY_KEY = 'markdown-editor:search-history'
+  const MAX_HISTORY = 20
+
+  const searchHistory = ref<string[]>(loadHistory())
+
+  function loadHistory(): string[] {
+    try {
+      const raw = localStorage.getItem(SEARCH_HISTORY_KEY)
+      return raw ? JSON.parse(raw) : []
+    } catch {
+      return []
+    }
+  }
+
+  function saveHistory(items: string[]) {
+    try {
+      localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(items))
+    } catch {
+      // ignore
+    }
+  }
+
+  function addToHistory(query: string) {
+    if (!query.trim()) return
+    const filtered = searchHistory.value.filter(h => h !== query)
+    filtered.unshift(query)
+    if (filtered.length > MAX_HISTORY) filtered.length = MAX_HISTORY
+    searchHistory.value = filtered
+    saveHistory(filtered)
+  }
+
+  function clearHistory() {
+    searchHistory.value = []
+    saveHistory([])
+  }
+
   // 转义正则表达式特殊字符，确保用户输入被当作普通字符串处理
   const escapeRegExp = (str: string): string => {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
@@ -49,6 +86,7 @@ export function useSearch(
     matchCount.value = matches.length
     currentMatch.value = matches.length > 0 ? 0 : -1
     if (currentMatch.value >= 0) selectMatch(0)
+    addToHistory(searchQuery.value)
   }
 
   const findNext = () => {
@@ -104,10 +142,12 @@ export function useSearch(
     caseSensitive,
     matchCount,
     currentMatch,
+    searchHistory,
     search,
     findNext,
     findPrev,
     replace,
-    replaceAll
+    replaceAll,
+    clearHistory
   }
 }

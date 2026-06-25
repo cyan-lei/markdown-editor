@@ -15,12 +15,29 @@
         v-for="tab in tabs"
         :key="tab.id"
         class="tab"
-        :class="{ active: activeTabId === tab.id }"
+        :class="{ active: activeTabId === tab.id, dragging: dragId === tab.id, dragover: dragOverId === tab.id }"
+        draggable="true"
         @click="$emit('switch', tab.id)"
         @contextmenu.prevent="$emit('contextmenu', $event, tab.id)"
+        @dragstart="onDragStart($event, tab.id)"
+        @dragover.prevent="onDragOver($event, tab.id)"
+        @drop.prevent="onDrop($event, tab.id)"
+        @dragend="onDragEnd"
       >
         <span class="tab-name">{{ tab.name || '未命名' }}</span>
         <span class="tab-modified" v-if="tab.modified">●</span>
+        <button
+          class="tab-pin"
+          :class="{ pinned: tab.pinned }"
+          @click.stop="$emit('togglePin', tab.id)"
+          :title="tab.pinned ? '取消固定' : '固定标签'"
+          :aria-label="tab.pinned ? '取消固定' : '固定标签'"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 17v5"/>
+            <path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>
+          </svg>
+        </button>
         <button class="tab-close" @click.stop="$emit('close', tab.id)" :aria-label="`关闭 ${tab.name}`">×</button>
       </div>
     </div>
@@ -28,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref } from 'vue'
 import type { Tab } from '@/types'
 
 defineProps<{
@@ -36,12 +54,44 @@ defineProps<{
   tocVisible: boolean
 }>()
 
-defineEmits<{
+const emit = defineEmits<{
   (e: 'switch', id: number): void
   (e: 'close', id: number): void
   (e: 'contextmenu', event: MouseEvent, tabId: number): void
   (e: 'toggleToc'): void
+  (e: 'togglePin', id: number): void
+  (e: 'reorder', fromId: number, toId: number): void
 }>()
+
+// 拖拽排序
+const dragId = ref<number | null>(null)
+const dragOverId = ref<number | null>(null)
+
+const onDragStart = (e: DragEvent, id: number) => {
+  dragId.value = id
+  e.dataTransfer?.setData('text/plain', String(id))
+  e.dataTransfer!.effectAllowed = 'move'
+}
+
+const onDragOver = (e: DragEvent, id: number) => {
+  if (dragId.value !== null && dragId.value !== id) {
+    dragOverId.value = id
+    e.dataTransfer!.dropEffect = 'move'
+  }
+}
+
+const onDrop = (e: DragEvent, id: number) => {
+  if (dragId.value !== null && dragId.value !== id) {
+    emit('reorder', dragId.value, id)
+  }
+  dragId.value = null
+  dragOverId.value = null
+}
+
+const onDragEnd = () => {
+  dragId.value = null
+  dragOverId.value = null
+}
 </script>
 
 <style scoped>
@@ -98,6 +148,14 @@ defineEmits<{
   margin-bottom: -1px;
 }
 
+.tab.dragging {
+  opacity: 0.4;
+}
+
+.tab.dragover {
+  border-top: 2px solid var(--accent);
+}
+
 .tab-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -107,6 +165,35 @@ defineEmits<{
 .tab-modified {
   color: #ef4444;
   font-size: 10px;
+}
+
+.tab-pin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.15s ease;
+}
+
+.tab:hover .tab-pin {
+  opacity: 1;
+}
+
+.tab-pin:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tab-pin.pinned {
+  opacity: 1;
+  color: var(--accent);
 }
 
 .tab-close {

@@ -3,7 +3,7 @@
     <div class="panel-header">
       <span class="panel-title">PREVIEW</span>
     </div>
-    <div class="preview" ref="previewRef" v-html="html" @scroll="onScroll" @click="handleClick"></div>
+    <div class="preview" id="markdown-preview" ref="previewRef" v-html="html" @scroll="onScroll" @click="handleClick"></div>
   </div>
 </template>
 
@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'scroll', scrollTop: number, scrollHeight: number, clientHeight: number): void
   (e: 'toggleTask', lineIndex: number): void
+  (e: 'tableAction', action: 'addRow' | 'addCol' | 'delRow' | 'delCol', tableIndex: number, rowIndex?: number, colIndex?: number): void
 }>()
 
 const scrollRatio = ref(0)
@@ -31,10 +32,40 @@ const processExtensions = async () => {
       await renderExtensions(previewRef.value)
       // 给代码块添加复制按钮
       addCopyButtons(previewRef.value)
+      // 验证链接
+      validateLinks(previewRef.value)
     } catch (err) {
       console.error('Render extensions failed:', err)
     }
   }
+}
+
+// 验证 Markdown 链接：标记相对链接和空链接
+const validateLinks = (container: HTMLElement) => {
+  const links = container.querySelectorAll('a[href]')
+  links.forEach(link => {
+    const href = link.getAttribute('href') || ''
+    // 忽略 javascript: 和锚点
+    if (href.startsWith('javascript:') || href.startsWith('#')) return
+    // 检查是否是有效的 http/https URL
+    if (!href.match(/^https?:\/\//i)) {
+      // 相对链接或文件路径，标记为可能无效
+      link.classList.add('link-relative')
+      link.title = `相对链接: ${href}`
+    } else {
+      link.target = '_blank'
+      link.rel = 'noopener noreferrer'
+    }
+  })
+  // 检查图片链接
+  const imgs = container.querySelectorAll('img[src]')
+  imgs.forEach(img => {
+    const src = img.getAttribute('src') || ''
+    if (!src.startsWith('data:') && !src.match(/^https?:\/\//i)) {
+      img.classList.add('img-broken')
+      img.title = `可能无法加载的图片: ${src}`
+    }
+  })
 }
 
 // 给所有 pre 代码块添加复制按钮
@@ -47,6 +78,26 @@ const addCopyButtons = (container: HTMLElement) => {
     btn.title = '复制代码'
     btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>'
     pre.appendChild(btn)
+  })
+  // 给表格添加编辑控件
+  const tables = container.querySelectorAll('table')
+  tables.forEach((table, tIndex) => {
+    if (table.parentElement?.querySelector('.table-toolbar')) return
+    const wrapper = document.createElement('div')
+    wrapper.className = 'table-wrapper'
+    wrapper.style.position = 'relative'
+    table.parentNode?.insertBefore(wrapper, table)
+    wrapper.appendChild(table)
+
+    const toolbar = document.createElement('div')
+    toolbar.className = 'table-toolbar'
+    toolbar.innerHTML = `
+      <button class="tbl-btn" data-action="addRow" data-table="${tIndex}">+行</button>
+      <button class="tbl-btn" data-action="addCol" data-table="${tIndex}">+列</button>
+      <button class="tbl-btn" data-action="delRow" data-table="${tIndex}">-行</button>
+      <button class="tbl-btn" data-action="delCol" data-table="${tIndex}">-列</button>
+    `
+    wrapper.appendChild(toolbar)
   })
 }
 
@@ -92,6 +143,15 @@ const handleClick = (e: MouseEvent) => {
     return
   }
 
+  // 表格编辑按钮
+  const tblBtn = target.closest('.tbl-btn') as HTMLElement | null
+  if (tblBtn) {
+    const action = tblBtn.dataset.action as 'addRow' | 'addCol' | 'delRow' | 'delCol'
+    const tableIdx = Number(tblBtn.dataset.table)
+    emit('tableAction', action, tableIdx)
+    return
+  }
+
   // Task list checkbox
   if (target.tagName === 'INPUT' && (target as HTMLInputElement).type === 'checkbox') {
     const allCheckboxes = previewRef.value?.querySelectorAll('input[type="checkbox"]')
@@ -130,6 +190,27 @@ defineExpose({
         break
       }
     }
+  },
+  getActiveHeadingSlug: () => {
+    if (!previewRef.value) return ''
+    const container = previewRef.value
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6')
+    const scrollTop = container.scrollTop
+    let activeSlug = ''
+    for (const h of headings) {
+      const el = h as HTMLElement
+      if (el.offsetTop - 60 <= scrollTop) {
+        const text = el.textContent || ''
+        activeSlug = text.toLowerCase()
+          .replace(/[^\w\u4e00-\u9fa5\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-')
+          .trim()
+      } else {
+        break
+      }
+    }
+    return activeSlug
   }
 })
 </script>
@@ -218,6 +299,17 @@ defineExpose({
 
 .preview a:hover {
   text-decoration: underline;
+}
+
+.preview :deep(.link-relative) {
+  color: #f59e0b;
+  border-bottom: 1px dashed #f59e0b;
+}
+
+.preview :deep(.img-broken) {
+  border: 2px dashed #ef4444;
+  padding: 4px;
+  border-radius: 4px;
 }
 
 .preview code {
@@ -362,6 +454,29 @@ defineExpose({
   width: 100%;
   border-collapse: collapse;
   margin: 16px 0;
+}
+
+.preview :deep(.table-toolbar) {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.preview :deep(.tbl-btn) {
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preview :deep(.tbl-btn:hover) {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
 
 .preview :deep(th),

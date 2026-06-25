@@ -12,6 +12,10 @@
       <AppIcon name="download" :size="16" />
       <span>导出 PDF</span>
     </button>
+    <button class="menu-item" @click="$emit('export', 'outline')">
+      <AppIcon name="filePlus" :size="16" />
+      <span>导出大纲</span>
+    </button>
   </div>
 </template>
 
@@ -23,7 +27,7 @@ defineProps<{
 }>()
 
 defineEmits<{
-  (e: 'export', format: 'md' | 'html' | 'pdf'): void
+  (e: 'export', format: 'md' | 'html' | 'pdf' | 'outline'): void
   (e: 'close'): void
 }>()
 </script>

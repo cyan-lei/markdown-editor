@@ -48,6 +48,44 @@
               <span class="pref-value">{{ local.editorWidth }}%</span>
             </div>
           </div>
+          <div class="pref-row">
+            <label class="pref-label">字数目标</label>
+            <div class="pref-control">
+              <input
+                type="number"
+                class="pref-number"
+                :min="0"
+                :step="100"
+                :value="local.wordGoal"
+                @input="update('wordGoal', Math.max(0, Number(($event.target as HTMLInputElement).value)))"
+              />
+              <span class="pref-value">{{ local.wordGoal > 0 ? '字' : '关闭' }}</span>
+            </div>
+          </div>
+          <div class="pref-row">
+            <label class="pref-label">编辑器模式</label>
+            <div class="pref-control">
+              <select
+                class="pref-select"
+                :value="local.editorMode"
+                @change="update('editorMode', ($event.target as HTMLSelectElement).value)"
+              >
+                <option value="default">默认</option>
+                <option value="vim">Vim</option>
+                <option value="emacs">Emacs</option>
+              </select>
+            </div>
+          </div>
+          <div class="pref-row pref-row-column">
+            <label class="pref-label">自定义预览 CSS</label>
+            <textarea
+              class="pref-css"
+              :value="local.customCss"
+              @input="update('customCss', ($event.target as HTMLTextAreaElement).value)"
+              placeholder="/* 在此编写自定义 CSS，作用于预览区 */&#10;/* 使用 #markdown-preview 选择器 */&#10;&#10;#markdown-preview h1 {&#10;  color: #e74c3c;&#10;}&#10;#markdown-preview p {&#10;  font-size: 16px;&#10;}"
+              rows="8"
+            ></textarea>
+          </div>
         </div>
         <div class="modal-footer">
           <button class="btn-secondary" @click="$emit('cancel')">取消</button>
@@ -67,12 +105,12 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update', key: keyof Preferences, value: number): void
+  (e: 'update', key: keyof Preferences, value: number | string): void
   (e: 'confirm'): void
   (e: 'cancel'): void
 }>()
 
-const update = (key: keyof Preferences, value: number) => {
+const update = (key: keyof Preferences, value: number | string) => {
   emit('update', key, value)
 }
 
@@ -99,8 +137,9 @@ void props
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
   min-width: 420px;
-  max-width: 520px;
-  overflow: hidden;
+  max-width: 560px;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .modal-header {
@@ -148,6 +187,61 @@ void props
   color: var(--text-secondary);
   min-width: 50px;
   text-align: right;
+}
+
+.pref-select {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.pref-select:focus {
+  border-color: var(--accent);
+}
+
+.pref-number {
+  width: 80px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+}
+
+.pref-number:focus {
+  border-color: var(--accent);
+}
+
+.pref-row-column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.pref-css {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.pref-css:focus {
+  border-color: var(--accent);
 }
 
 .modal-footer {

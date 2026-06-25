@@ -42,7 +42,7 @@ export function useHistory(tabId: Ref<number | null>) {
 
   const updateFlags = (id: number) => {
     const stack = getStack(id)
-    canUndo.value = stack.past.length > 0
+    canUndo.value = stack.past.length > 1
     canRedo.value = stack.future.length > 0
   }
 
@@ -103,14 +103,15 @@ export function useHistory(tabId: Ref<number | null>) {
     if (id === null) return null
     const stack = getStack(id)
 
+    // past 需要至少 2 条记录才能撤销（当前状态 + 前一个状态）
+    if (stack.past.length <= 1) return null
+
     // 弹出当前状态
     stack.past.pop()
-    // 返回前一个状态（past 栈顶），如果没有则返回空状态
+    // 返回前一个状态（past 栈顶）
     const prev = stack.past[stack.past.length - 1]
     updateFlags(id)
-    if (prev) return prev
-    // past 为空，返回空状态
-    return { content: '', selectionStart: 0, selectionEnd: 0 }
+    return prev
   }
 
   const redo = (): HistoryEntry | null => {
@@ -119,6 +120,8 @@ export function useHistory(tabId: Ref<number | null>) {
     const stack = getStack(id)
     const entry = stack.future.pop()
     if (!entry) return null
+    stack.past.push(entry)
+    if (stack.past.length > MAX_HISTORY) stack.past.shift()
     updateFlags(id)
     return entry
   }
@@ -140,6 +143,17 @@ export function useHistory(tabId: Ref<number | null>) {
     updateFlags(id)
   }
 
+  // 确保初始内容在历史栈中（仅在 past 为空时推入）
+  const ensureInitial = (content: string, selectionStart: number, selectionEnd: number) => {
+    const id = tabId.value
+    if (id === null) return
+    const stack = getStack(id)
+    if (stack.past.length === 0) {
+      stack.past.push({ content, selectionStart, selectionEnd })
+      updateFlags(id)
+    }
+  }
+
   const clear = (id: number) => {
     clearHistory(id)
   }
@@ -150,6 +164,7 @@ export function useHistory(tabId: Ref<number | null>) {
     redo,
     pushToFuture,
     pushToPast,
+    ensureInitial,
     canUndo,
     canRedo,
     clear,
