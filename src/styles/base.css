@@ -124,6 +124,113 @@ body {
   background: var(--bg-tertiary);
 }
 
+/* ---- 高亮标记 ---- */
+.preview :deep(mark) {
+  background: #fef08a;
+  color: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.dark .preview :deep(mark) {
+  background: #854d0e;
+  color: #fef3c7;
+}
+
+.theme-duck .preview :deep(mark) {
+  background: rgba(251, 191, 36, 0.3);
+  color: inherit;
+}
+
+/* ---- 脚注 ---- */
+.preview :deep(.footnote-ref) {
+  font-size: 0.75em;
+  vertical-align: super;
+  line-height: 0;
+}
+
+.preview :deep(.footnote-ref a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.preview :deep(.footnotes) {
+  margin-top: 32px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.88em;
+  color: var(--text-secondary);
+}
+
+.preview :deep(.footnotes ol) {
+  padding-left: 20px;
+}
+
+.preview :deep(.footnotes li) {
+  margin: 4px 0;
+}
+
+.preview :deep(.footnote-back) {
+  text-decoration: none;
+  color: var(--accent);
+}
+
+/* ---- GitHub Callouts ---- */
+.preview :deep(.callout) {
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.preview :deep(.callout-title) {
+  font-weight: 600;
+  font-size: 0.9em;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.preview :deep(.callout p:last-child) {
+  margin-bottom: 0;
+}
+
+/* NOTE */
+.preview :deep(.callout-note) { border-left-color: #0969da; background: #ddf4ff; }
+.preview :deep(.callout-note .callout-title) { color: #0969da; }
+
+/* TIP */
+.preview :deep(.callout-tip) { border-left-color: #1a7f37; background: #dafbe1; }
+.preview :deep(.callout-tip .callout-title) { color: #1a7f37; }
+
+/* IMPORTANT */
+.preview :deep(.callout-important) { border-left-color: #8250df; background: #fbefff; }
+.preview :deep(.callout-important .callout-title) { color: #8250df; }
+
+/* WARNING */
+.preview :deep(.callout-warning) { border-left-color: #9a6700; background: #fff8c5; }
+.preview :deep(.callout-warning .callout-title) { color: #9a6700; }
+
+/* CAUTION */
+.preview :deep(.callout-caution) { border-left-color: #cf222e; background: #ffebe9; }
+.preview :deep(.callout-caution .callout-title) { color: #cf222e; }
+
+/* 深色主题 */
+.dark .preview :deep(.callout-note) { border-left-color: #4493f8; background: rgba(68, 147, 248, 0.1); }
+.dark .preview :deep(.callout-note .callout-title) { color: #4493f8; }
+.dark .preview :deep(.callout-tip) { border-left-color: #3fb950; background: rgba(63, 185, 80, 0.1); }
+.dark .preview :deep(.callout-tip .callout-title) { color: #3fb950; }
+.dark .preview :deep(.callout-important) { border-left-color: #a371f7; background: rgba(163, 113, 247, 0.1); }
+.dark .preview :deep(.callout-important .callout-title) { color: #a371f7; }
+.dark .preview :deep(.callout-warning) { border-left-color: #d29922; background: rgba(210, 153, 34, 0.1); }
+.dark .preview :deep(.callout-warning .callout-title) { color: #d29922; }
+.dark .preview :deep(.callout-caution) { border-left-color: #f85149; background: rgba(248, 81, 73, 0.1); }
+.dark .preview :deep(.callout-caution .callout-title) { color: #f85149; }
+
+/* duck 主题 */
+.theme-duck .preview :deep(.callout) { border-left-color: var(--accent) !important; background: rgba(251, 191, 36, 0.08); }
+.theme-duck .preview :deep(.callout-title) { color: var(--accent) !important; }
+
 /* ===== Duck 主题交互样式（参考 MotherDuck 设计） ===== */
 
 /* 主按钮：长方形 + 黄底黑字 + hover 背景渐变上浮 */
