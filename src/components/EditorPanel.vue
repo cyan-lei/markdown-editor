@@ -63,6 +63,8 @@
         @keydown="onKeydown"
         @paste="onPaste"
         @scroll="onScroll"
+        @dragover.prevent
+        @drop="onDrop"
         @keyup="updateCursor"
         @click="updateCursor"
         @select="updateCursor"
@@ -91,7 +93,9 @@ import { useHistory } from '@/composables/useHistory'
 import { useSearch } from '@/composables/useSearch'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useEditorMode } from '@/composables/useEditorMode'
-import type { EditorMode } from '@/composables/usePreferences'
+import { usePreferences, type EditorMode } from '@/composables/usePreferences'
+import { useToast } from '@/composables/useToast'
+import { uploadToGitHub } from '@/services/imageService'
 
 const props = defineProps<{
   modelValue: string
@@ -111,6 +115,9 @@ const emit = defineEmits<{
   (e: 'save'): void
   (e: 'close'): void
 }>()
+
+const { preferences } = usePreferences()
+const { showToast } = useToast()
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const lineNumbersRef = ref<HTMLElement | null>(null)
@@ -516,23 +523,7 @@ const onPaste = (e: ClipboardEvent) => {
     const file = imageItem.getAsFile()
     if (file) {
       e.preventDefault()
-      const reader = new FileReader()
-      reader.onload = () => {
-        const base64 = reader.result as string
-        const el = textareaRef.value
-        if (!el) return
-        const start = el.selectionStart
-        const end = el.selectionEnd
-        const insert = `![图片](${base64})`
-        const newValue = el.value.substring(0, start) + insert + el.value.substring(end)
-        emit('update', newValue)
-        el.value = newValue
-        const cursorPos = start + insert.length
-        el.setSelectionRange(cursorPos, cursorPos)
-        history.push(newValue, cursorPos, cursorPos)
-        updateCursor()
-      }
-      reader.readAsDataURL(file)
+      handleImageInsert(file)
       return
     }
   }
@@ -581,6 +572,59 @@ const onPaste = (e: ClipboardEvent) => {
   el.setSelectionRange(cursorStart, cursorEnd)
   history.push(newValue, cursorStart, cursorEnd)
   updateCursor()
+}
+
+// --- 图片插入：优先 GitHub 图床，失败回退 base64 ---
+const handleImageInsert = async (file: File) => {
+  const config = preferences.value.imageConfig
+  const el = textareaRef.value
+  if (!el) return
+
+  const insertAtCursor = (insert: string) => {
+    const start = el.selectionStart
+    const end = el.selectionEnd
+    const newValue = el.value.substring(0, start) + insert + el.value.substring(end)
+    emit('update', newValue)
+    el.value = newValue
+    const cursorPos = start + insert.length
+    el.setSelectionRange(cursorPos, cursorPos)
+    history.push(newValue, cursorPos, cursorPos)
+    updateCursor()
+  }
+
+  // 配置了图床则上传
+  if (config.enabled && config.token && config.owner && config.repo) {
+    showToast('图片上传中...', 'info')
+    try {
+      const url = await uploadToGitHub(file, config)
+      insertAtCursor(`![图片](${url})`)
+      showToast('图片上传成功', 'success')
+      return
+    } catch (err) {
+      console.warn('图床上传失败，回退 base64:', err)
+      showToast('上传失败，已转 base64', 'error')
+    }
+  }
+
+  // 回退：转 base64
+  const reader = new FileReader()
+  reader.onload = () => {
+    const base64 = reader.result as string
+    insertAtCursor(`![图片](${base64})`)
+  }
+  reader.readAsDataURL(file)
+}
+
+// --- 拖拽图片文件 ---
+const onDrop = (e: DragEvent) => {
+  if (!e.dataTransfer) return
+  const imageFile = Array.from(e.dataTransfer.files).find(
+    f => f.type.startsWith('image/')
+  )
+  if (imageFile) {
+    e.preventDefault()
+    handleImageInsert(imageFile)
+  }
 }
 
 // --- Existing handlers ---

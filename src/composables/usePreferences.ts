@@ -4,6 +4,15 @@ const STORAGE_KEY = 'markdown-editor:preferences'
 
 export type EditorMode = 'default' | 'vim' | 'emacs'
 
+export interface GitHubImageConfig {
+  enabled: boolean
+  token: string
+  owner: string
+  repo: string
+  branch: string
+  path: string
+}
+
 export interface Preferences {
   fontSize: number
   lineHeight: number
@@ -16,6 +25,7 @@ export interface Preferences {
   scrollSync: boolean
   autoSaveEnabled: boolean
   autoSaveInterval: number // seconds
+  imageConfig: GitHubImageConfig
 }
 
 const DEFAULTS: Preferences = {
@@ -29,7 +39,15 @@ const DEFAULTS: Preferences = {
   spellcheck: true,
   scrollSync: true,
   autoSaveEnabled: true,
-  autoSaveInterval: 30
+  autoSaveInterval: 30,
+  imageConfig: {
+    enabled: false,
+    token: '',
+    owner: '',
+    repo: '',
+    branch: 'master',
+    path: 'images'
+  }
 }
 
 function load(): Preferences {
