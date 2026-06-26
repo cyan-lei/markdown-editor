@@ -119,7 +119,7 @@
       />
     </main>
 
-    <PreferencesModal
+    <ConfirmModal
       :visible="showDraftModal"
       title="恢复草稿"
       :message="`发现 ${drafts.length} 个未保存的草稿，是否恢复？`"
@@ -232,7 +232,7 @@ const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
 
 // --- Composables ---
-const { preferences, reset: resetPrefs } = usePreferences()
+const { preferences } = usePreferences()
 const { dividerPosition, startDrag } = useDividerDrag(20, 80, preferences.value.editorWidth)
 const { recentFiles, addRecent, removeRecent, clearRecent } = useRecentFiles()
 const { showToast } = useToast()
@@ -287,7 +287,7 @@ const { start: startAutoSave, stop: stopAutoSave } = useAutoSave(tabs, activeTab
 
 // --- Preferences local state ---
 const prefLocal = ref<Preferences>({ ...preferences.value })
-const updatePrefLocal = (key: keyof Preferences, value: number | string | boolean) => {
+const updatePrefLocal = (key: keyof Preferences, value: number | string | boolean | Preferences['imageConfig']) => {
   prefLocal.value = { ...prefLocal.value, [key]: value }
 }
 const applyPreferences = () => {

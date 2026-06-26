@@ -187,7 +187,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update', key: keyof Preferences, value: number | string | boolean): void
+  (e: 'update', key: keyof Preferences, value: number | string | boolean | Preferences['imageConfig']): void
   (e: 'confirm'): void
   (e: 'cancel'): void
 }>()
