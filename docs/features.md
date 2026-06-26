@@ -1,6 +1,4 @@
 # 功能介绍
-
-
 ## 整体界面   
 
 ![整体界面](../scripts/screenshots/02-main-interface.png)
