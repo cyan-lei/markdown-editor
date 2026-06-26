@@ -67,6 +67,11 @@
                   @change="update('scrollSync', ($event.target as HTMLInputElement).checked)" />
                 <span class="toggle-name">滚动同步</span>
               </label>
+              <label class="toggle-item" :class="{ on: local.typewriterMode }">
+                <input type="checkbox" :checked="local.typewriterMode"
+                  @change="update('typewriterMode', ($event.target as HTMLInputElement).checked)" />
+                <span class="toggle-name">打字机模式</span>
+              </label>
               <label class="toggle-item" :class="{ on: local.autoSaveEnabled }">
                 <input type="checkbox" :checked="local.autoSaveEnabled"
                   @change="update('autoSaveEnabled', ($event.target as HTMLInputElement).checked)" />
@@ -90,6 +95,67 @@
                 <span class="pref-value">{{ local.wordGoal > 0 ? '字' : '关闭' }}</span>
               </div>
             </div>
+          </div>
+
+          <!-- 图床配置 -->
+          <div class="pref-section">
+            <details class="pref-details">
+              <summary class="section-title clickable">GitHub 图床配置</summary>
+              <div class="pref-item" style="margin-top: 10px;">
+                <label class="toggle-item" :class="{ on: local.imageConfig.enabled }" style="flex: 1;">
+                  <input type="checkbox" :checked="local.imageConfig.enabled"
+                    @change="updateImageConfig('enabled', ($event.target as HTMLInputElement).checked)" />
+                  <span class="toggle-name">启用 GitHub 图床上传</span>
+                </label>
+              </div>
+              <div class="section-grid" style="margin-top: 10px;">
+                <div class="pref-item">
+                  <label class="pref-label">GitHub Token</label>
+                </div>
+                <div class="pref-item">
+                  <input type="password" class="pref-number" style="width: 100%;"
+                    :value="local.imageConfig.token"
+                    @input="updateImageConfig('token', ($event.target as HTMLInputElement).value)"
+                    placeholder="ghp_xxx" />
+                </div>
+                <div class="pref-item">
+                  <label class="pref-label">用户名</label>
+                </div>
+                <div class="pref-item">
+                  <input type="text" class="pref-number" style="width: 100%;"
+                    :value="local.imageConfig.owner"
+                    @input="updateImageConfig('owner', ($event.target as HTMLInputElement).value)"
+                    placeholder="cyan-lei" />
+                </div>
+                <div class="pref-item">
+                  <label class="pref-label">仓库名</label>
+                </div>
+                <div class="pref-item">
+                  <input type="text" class="pref-number" style="width: 100%;"
+                    :value="local.imageConfig.repo"
+                    @input="updateImageConfig('repo', ($event.target as HTMLInputElement).value)"
+                    placeholder="markdown-editor" />
+                </div>
+                <div class="pref-item">
+                  <label class="pref-label">分支</label>
+                </div>
+                <div class="pref-item">
+                  <input type="text" class="pref-number" style="width: 100%;"
+                    :value="local.imageConfig.branch"
+                    @input="updateImageConfig('branch', ($event.target as HTMLInputElement).value)"
+                    placeholder="master" />
+                </div>
+                <div class="pref-item">
+                  <label class="pref-label">存储路径</label>
+                </div>
+                <div class="pref-item">
+                  <input type="text" class="pref-number" style="width: 100%;"
+                    :value="local.imageConfig.path"
+                    @input="updateImageConfig('path', ($event.target as HTMLInputElement).value)"
+                    placeholder="images" />
+                </div>
+              </div>
+            </details>
           </div>
 
           <!-- 自定义 CSS -->
@@ -121,13 +187,17 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  (e: 'update', key: keyof Preferences, value: number | string | boolean): void
+  (e: 'update', key: keyof Preferences, value: number | string | boolean | Preferences['imageConfig']): void
   (e: 'confirm'): void
   (e: 'cancel'): void
 }>()
 
 const update = (key: keyof Preferences, value: number | string | boolean) => {
   emit('update', key, value)
+}
+
+const updateImageConfig = (key: keyof Preferences['imageConfig'], value: string | boolean) => {
+  emit('update', 'imageConfig', { ...props.local.imageConfig, [key]: value })
 }
 
 void props

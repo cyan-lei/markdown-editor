@@ -60,6 +60,60 @@ const markedInstance = new Marked(
 
 markedInstance.use({ breaks: true, gfm: true })
 
+// --- ==高亮== 扩展 ---
+markedInstance.use({
+  extensions: [
+    {
+      name: 'highlight',
+      level: 'inline',
+      start(src: string) { return src.indexOf('==') },
+      tokenizer(src: string) {
+        const match = /^==(?!=)(.+?)(?!=)==/.exec(src)
+        if (match) {
+          return {
+            type: 'highlight',
+            raw: match[0],
+            text: match[1].trim()
+          }
+        }
+        return undefined
+      },
+      renderer(token: any) {
+        return `<mark>${token.text}</mark>`
+      }
+    }
+  ]
+})
+
+// --- [^id] 脚注引用扩展 ---
+markedInstance.use({
+  extensions: [
+    {
+      name: 'footnoteRef',
+      level: 'inline',
+      start(src: string) {
+        const idx = src.indexOf('[^')
+        return idx >= 0 ? idx : undefined
+      },
+      tokenizer(src: string) {
+        const match = /^\[\^([^\]]+)\]/.exec(src)
+        if (match) {
+          return {
+            type: 'footnoteRef',
+            raw: match[0],
+            id: match[1]
+          }
+        }
+        return undefined
+      },
+      renderer(token: any) {
+        const id = token.id
+        return `<sup class="footnote-ref"><a href="#fn-${id}" id="fnref-${id}">[${id}]</a></sup>`
+      }
+    }
+  ]
+})
+
 // Custom renderer: wrap mermaid code blocks in a div for post-processing
 // marked v11 renderer.code 签名: code(code, infoString, escaped)
 markedInstance.use({
@@ -83,12 +137,54 @@ markedInstance.use({
 
 export function renderMarkdown(content: string): string {
   try {
-    const result = markedInstance.parse(content)
-    const html = typeof result === 'string' ? result : String(result)
-    return html.replace(
+    let processedContent = content
+
+    // --- GitHub Callouts 预处理 ---
+    const calloutTypes: Record<string, string> = {
+      'NOTE': 'note',
+      'TIP': 'tip',
+      'IMPORTANT': 'important',
+      'WARNING': 'warning',
+      'CAUTION': 'caution'
+    }
+    const calloutRegex = /^> \[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*\n((?:>.*\n?)*)/gm
+    processedContent = processedContent.replace(calloutRegex, (_, type, block) => {
+      const typeClass = calloutTypes[type]
+      const innerContent = block.split('\n')
+        .map((line: string) => line.replace(/^>\s?/, ''))
+        .join('\n')
+        .trim()
+      return `<div class="callout callout-${typeClass}" data-callout="${typeClass}">\n<p class="callout-title">${type}</p>\n${innerContent}\n</div>\n`
+    })
+
+    // --- 提取脚注定义（[^id]: text），并从原文中移除 ---
+    const footnoteDefs: Record<string, string> = {}
+    processedContent = processedContent.replace(
+      /^\[\^([^\]]+)\]:\s*(.+)$/gm,
+      (_, id, text) => {
+        footnoteDefs[id] = text.trim()
+        return ''
+      }
+    )
+    processedContent = processedContent.replace(/\n{3,}/g, '\n\n')
+
+    const result = markedInstance.parse(processedContent)
+    let html = typeof result === 'string' ? result : String(result)
+    html = html.replace(
       /<pre><code class="hljs language-([^"]*)">/g,
       (_match, lang) => `<pre data-lang="${lang}"><code class="hljs language-${lang}">`
     )
+
+    // 如果有脚注定义，追加脚注列表到 HTML 末尾
+    const footnoteIds = Object.keys(footnoteDefs)
+    if (footnoteIds.length > 0) {
+      const items = footnoteIds
+        .map(id => `<li id="fn-${id}">${footnoteDefs[id]} <a href="#fnref-${id}" class="footnote-back">↩</a></li>`)
+        .join('\n')
+      html += `\n<section class="footnotes">\n<ol>\n${items}\n</ol>\n</section>\n`
+    }
+
+    return html
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     return `<div style="padding:16px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;">Markdown 渲染错误: ${msg}</div>`

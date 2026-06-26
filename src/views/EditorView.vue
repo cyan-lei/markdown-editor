@@ -28,22 +28,18 @@
             </button>
           </div>
         </div>
-        <button class="btn-secondary" @click="handleOpenFiles" aria-label="打开文件">
-          <AppIcon name="folderOpen" :size="16" />
-          打开
+        <button class="btn-icon" @click="handleOpenFiles" title="打开文件" aria-label="打开文件">
+          <AppIcon name="folderOpen" :size="18" />
         </button>
-        <button class="btn-secondary" @click="handleSave" aria-label="保存文件">
-          <AppIcon name="save" :size="16" />
-          保存
+        <button class="btn-icon" @click="handleSave" title="保存文件" aria-label="保存文件">
+          <AppIcon name="save" :size="18" />
         </button>
-        <button class="btn-secondary" @click="handleNewFile" aria-label="新建文件">
-          <AppIcon name="filePlus" :size="16" />
-          新建
+        <button class="btn-icon" @click="handleNewFile" title="新建文件" aria-label="新建文件">
+          <AppIcon name="filePlus" :size="18" />
         </button>
         <div class="export-wrapper">
-          <button class="btn-primary" @click.stop="showExportMenu = !showExportMenu" aria-label="导出">
-            <AppIcon name="download" :size="16" />
-            导出
+          <button class="btn-icon" @click.stop="showExportMenu = !showExportMenu" title="导出" aria-label="导出">
+            <AppIcon name="download" :size="18" />
           </button>
           <ExportMenu
             :visible="showExportMenu"
@@ -51,6 +47,12 @@
             @close="showExportMenu = false"
           />
         </div>
+        <button class="btn-icon" @click="handleFormat" title="格式化文档" aria-label="格式化文档">
+          <AppIcon name="wand" :size="18" />
+        </button>
+        <button class="btn-icon" @click="showMindmap = true" title="思维导图" aria-label="思维导图">
+          <AppIcon name="mindmap" :size="18" />
+        </button>
         <button class="btn-icon" @click="showPreferences = true" aria-label="偏好设置" title="偏好设置">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
@@ -117,7 +119,7 @@
       />
     </main>
 
-    <PreferencesModal
+    <ConfirmModal
       :visible="showDraftModal"
       title="恢复草稿"
       :message="`发现 ${drafts.length} 个未保存的草稿，是否恢复？`"
@@ -171,6 +173,12 @@
       @cancel="handleCloseConfirmCancel"
     />
 
+    <MindmapModal
+      :visible="showMindmap"
+      :content="activeTabContent"
+      @close="showMindmap = false"
+    />
+
     <ToastContainer />
   </div>
 </template>
@@ -192,6 +200,7 @@ import ToastContainer from '@/components/ToastContainer.vue'
 import TemplateModal, { type DocTemplate } from '@/components/TemplateModal.vue'
 import GlobalSearchModal from '@/components/GlobalSearchModal.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import MindmapModal from '@/components/MindmapModal.vue'
 import { useEditor } from '@/composables/useEditor'
 import { useDividerDrag } from '@/composables/useDividerDrag'
 import { useShortcuts } from '@/composables/useShortcuts'
@@ -202,6 +211,7 @@ import { useToc } from '@/composables/useToc'
 import { useToast } from '@/composables/useToast'
 import { fileService } from '@/services/fileService'
 import { themeService, themeOptions } from '@/services/themeService'
+import { formatMarkdown } from '@/services/formatService'
 import { clearHistory } from '@/composables/useHistory'
 
 // --- Refs ---
@@ -215,13 +225,14 @@ const readingMode = ref(false)
 const showTemplateModal = ref(false)
 const showGlobalSearch = ref(false)
 const showCloseConfirm = ref(false)
+const showMindmap = ref(false)
 const pendingCloseTabId = ref<number | null>(null)
 const drafts = ref(getDrafts())
 const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
 
 // --- Composables ---
-const { preferences, reset: resetPrefs } = usePreferences()
+const { preferences } = usePreferences()
 const { dividerPosition, startDrag } = useDividerDrag(20, 80, preferences.value.editorWidth)
 const { recentFiles, addRecent, removeRecent, clearRecent } = useRecentFiles()
 const { showToast } = useToast()
@@ -268,6 +279,7 @@ const handleReorder = (fromId: number, toId: number) => {
 // --- Auto-save ---
 const autoSaveEnabled = computed(() => preferences.value.autoSaveEnabled)
 const autoSaveInterval = computed(() => preferences.value.autoSaveInterval * 1000)
+
 const { start: startAutoSave, stop: stopAutoSave } = useAutoSave(tabs, activeTabId, {
   enabled: autoSaveEnabled,
   interval: autoSaveInterval
@@ -275,7 +287,7 @@ const { start: startAutoSave, stop: stopAutoSave } = useAutoSave(tabs, activeTab
 
 // --- Preferences local state ---
 const prefLocal = ref<Preferences>({ ...preferences.value })
-const updatePrefLocal = (key: keyof Preferences, value: number | string | boolean) => {
+const updatePrefLocal = (key: keyof Preferences, value: number | string | boolean | Preferences['imageConfig']) => {
   prefLocal.value = { ...prefLocal.value, [key]: value }
 }
 const applyPreferences = () => {
@@ -549,6 +561,19 @@ const handlePrint = () => {
   const tab = tabs.value.find(t => t.id === activeTabId.value)
   if (!tab) return
   fileService.exportPDF(tab, preferences.value.customCss)
+}
+
+// --- 格式化文档 ---
+const handleFormat = () => {
+  const tab = tabs.value.find(t => t.id === activeTabId.value)
+  if (!tab) return
+  const formatted = formatMarkdown(tab.content)
+  if (formatted !== tab.content) {
+    updateContent(formatted)
+    showToast('文档已格式化', 'success')
+  } else {
+    showToast('文档已是规范格式', 'info')
+  }
 }
 
 // --- Drag and drop ---
