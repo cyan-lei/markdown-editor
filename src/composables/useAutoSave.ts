@@ -2,12 +2,13 @@ import { watch, type Ref } from 'vue'
 import type { Tab } from '@/types'
 
 const STORAGE_KEY = 'markdown-editor:drafts'
-const SAVE_INTERVAL = 30000 // 30 seconds
 
-interface DraftEntry {
+export interface DraftEntry {
   name: string
   content: string
   timestamp: number
+  pinned?: boolean
+  active?: boolean
 }
 
 function loadDrafts(): DraftEntry[] {
@@ -40,16 +41,23 @@ export function clearDraft(name: string) {
   saveDrafts(drafts)
 }
 
-export function useAutoSave(tabs: Ref<Tab[]>) {
+export function useAutoSave(
+  tabs: Ref<Tab[]>,
+  activeTabId: Ref<number | null>,
+  options?: { enabled: Ref<boolean>; interval: Ref<number> }
+) {
   let timer: ReturnType<typeof setInterval> | null = null
 
   const saveAll = () => {
+    if (options?.enabled && !options.enabled.value) return
     const drafts: DraftEntry[] = tabs.value
       .filter(t => t.modified || !t.fileHandle)
       .map(t => ({
         name: t.name,
         content: t.content,
-        timestamp: Date.now()
+        timestamp: Date.now(),
+        pinned: t.pinned,
+        active: t.id === activeTabId.value
       }))
     if (drafts.length > 0) {
       saveDrafts(drafts)
@@ -60,7 +68,8 @@ export function useAutoSave(tabs: Ref<Tab[]>) {
 
   const start = () => {
     if (timer) clearInterval(timer)
-    timer = setInterval(saveAll, SAVE_INTERVAL)
+    const interval = options?.interval?.value ?? 30000
+    timer = setInterval(saveAll, interval)
   }
 
   const stop = () => {
@@ -70,11 +79,21 @@ export function useAutoSave(tabs: Ref<Tab[]>) {
     }
   }
 
+  const restart = () => {
+    stop()
+    start()
+  }
+
   // 当标签的修改状态变化时立即保存
   watch(
     () => tabs.value.some(t => t.modified),
     () => saveAll()
   )
+
+  // 当间隔或开关变化时重启定时器
+  if (options) {
+    watch([options.enabled, options.interval], () => restart())
+  }
 
   return { start, stop, saveAll }
 }

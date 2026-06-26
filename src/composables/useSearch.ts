@@ -8,6 +8,7 @@ export function useSearch(
   const searchQuery = ref('')
   const replaceQuery = ref('')
   const caseSensitive = ref(false)
+  const useRegex = ref(false)
   const matchCount = ref(0)
   const currentMatch = ref(0)
 
@@ -55,16 +56,24 @@ export function useSearch(
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
 
-  const findMatches = (text: string, query: string, cs: boolean): { start: number; end: number }[] => {
+  const findMatches = (text: string, query: string, cs: boolean, regex: boolean): { start: number; end: number }[] => {
     if (!query) return []
     const flags = cs ? 'g' : 'gi'
-    const escaped = escapeRegExp(query)
-    const regex = new RegExp(escaped, flags)
+    let pattern: RegExp
+    if (regex) {
+      try {
+        pattern = new RegExp(query, flags)
+      } catch {
+        return []
+      }
+    } else {
+      pattern = new RegExp(escapeRegExp(query), flags)
+    }
     const result: { start: number; end: number }[] = []
     let m: RegExpExecArray | null
-    while ((m = regex.exec(text)) !== null) {
+    while ((m = pattern.exec(text)) !== null) {
       result.push({ start: m.index, end: m.index + m[0].length })
-      if (m[0].length === 0) regex.lastIndex++
+      if (m[0].length === 0) pattern.lastIndex++
     }
     return result
   }
@@ -82,7 +91,7 @@ export function useSearch(
 
   const search = () => {
     const text = getContent()
-    matches = findMatches(text, searchQuery.value, caseSensitive.value)
+    matches = findMatches(text, searchQuery.value, caseSensitive.value, useRegex.value)
     matchCount.value = matches.length
     currentMatch.value = matches.length > 0 ? 0 : -1
     if (currentMatch.value >= 0) selectMatch(0)
@@ -108,7 +117,7 @@ export function useSearch(
     const newText = text.substring(0, m.start) + replaceQuery.value + text.substring(m.end)
     setContent(newText)
 
-    matches = findMatches(newText, searchQuery.value, caseSensitive.value)
+    matches = findMatches(newText, searchQuery.value, caseSensitive.value, useRegex.value)
     matchCount.value = matches.length
 
     if (matches.length > 0) {
@@ -124,13 +133,21 @@ export function useSearch(
   const replaceAll = () => {
     if (matches.length === 0) return
     const text = getContent()
-    const escaped = escapeRegExp(searchQuery.value)
     const flags = caseSensitive.value ? 'g' : 'gi'
-    const regex = new RegExp(escaped, flags)
+    let regex: RegExp
+    if (useRegex.value) {
+      try {
+        regex = new RegExp(searchQuery.value, flags)
+      } catch {
+        return
+      }
+    } else {
+      regex = new RegExp(escapeRegExp(searchQuery.value), flags)
+    }
     const newText = text.replace(regex, replaceQuery.value)
     setContent(newText)
     // 重新计算匹配，而不是直接清空
-    matches = findMatches(newText, searchQuery.value, caseSensitive.value)
+    matches = findMatches(newText, searchQuery.value, caseSensitive.value, useRegex.value)
     matchCount.value = matches.length
     currentMatch.value = matches.length > 0 ? 0 : -1
     if (currentMatch.value >= 0) selectMatch(0)
@@ -140,6 +157,7 @@ export function useSearch(
     searchQuery,
     replaceQuery,
     caseSensitive,
+    useRegex,
     matchCount,
     currentMatch,
     searchHistory,
@@ -148,6 +166,7 @@ export function useSearch(
     findPrev,
     replace,
     replaceAll,
-    clearHistory
+    clearHistory,
+    getMatches: () => matches
   }
 }

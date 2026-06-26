@@ -1,5 +1,5 @@
 <template>
-  <div class="editor-view" :class="{ 'focus-mode': focusMode }" @dragover.prevent @drop.prevent="handleDrop">
+  <div class="editor-view" :class="{ 'focus-mode': focusMode, 'reading-mode': readingMode }" @dragover.prevent @drop.prevent="handleDrop">
     <AppHeader>
       <template #actions>
         <div class="theme-switcher" @click.stop>
@@ -89,6 +89,8 @@
           :lineHeight="preferences.lineHeight"
           :editorMode="preferences.editorMode"
           :wordGoal="preferences.wordGoal"
+          :wordWrap="preferences.wordWrap"
+          :spellcheck="preferences.spellcheck"
           @update="updateContent"
           @save="handleSave"
           @close="handleCloseTab(activeTabId!)"
@@ -114,18 +116,6 @@
         @clearRecent="clearRecent"
       />
     </main>
-
-    <ConfirmModal
-      :visible="showCloseConfirm"
-      title="未保存的更改"
-      :message="`「${pendingCloseTab?.name || ''}」有未保存的更改，是否在关闭前保存？`"
-      confirmLabel="保存"
-      tertiaryLabel="不保存"
-      tertiaryVariant="danger"
-      @confirm="handleCloseSave"
-      @tertiary="handleCloseDiscard"
-      @cancel="handleCloseCancel"
-    />
 
     <PreferencesModal
       :visible="showDraftModal"
@@ -170,13 +160,23 @@
       @close="showGlobalSearch = false"
     />
 
+    <ConfirmModal
+      :visible="showCloseConfirm"
+      title="未保存的更改"
+      :message="`是否保存对 ${pendingCloseTabName} 的更改？`"
+      confirmLabel="保存"
+      tertiaryLabel="不保存"
+      @confirm="handleCloseConfirmSave"
+      @tertiary="handleCloseConfirmDiscard"
+      @cancel="handleCloseConfirmCancel"
+    />
+
     <ToastContainer />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import type { Tab } from '@/types'
 import AppHeader from '@/components/AppHeader.vue'
 import AppIcon from '@/components/AppIcon.vue'
 import TabBar from '@/components/TabBar.vue'
@@ -184,7 +184,6 @@ import EditorPanel from '@/components/EditorPanel.vue'
 import PreviewPanel from '@/components/PreviewPanel.vue'
 import ShortcutsModal from '@/components/ShortcutsModal.vue'
 import EmptyState from '@/components/EmptyState.vue'
-import ConfirmModal from '@/components/ConfirmModal.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import PreferencesModal from '@/components/PreferencesModal.vue'
 import TableOfContents from '@/components/TableOfContents.vue'
@@ -192,11 +191,12 @@ import TabContextMenu from '@/components/TabContextMenu.vue'
 import ToastContainer from '@/components/ToastContainer.vue'
 import TemplateModal, { type DocTemplate } from '@/components/TemplateModal.vue'
 import GlobalSearchModal from '@/components/GlobalSearchModal.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 import { useEditor } from '@/composables/useEditor'
 import { useDividerDrag } from '@/composables/useDividerDrag'
 import { useShortcuts } from '@/composables/useShortcuts'
 import { useAutoSave, getDrafts, clearDrafts } from '@/composables/useAutoSave'
-import { useRecentFiles } from '@/composables/useRecentFiles'
+import { useRecentFiles, getFileHandle } from '@/composables/useRecentFiles'
 import { usePreferences, type Preferences } from '@/composables/usePreferences'
 import { useToc } from '@/composables/useToc'
 import { useToast } from '@/composables/useToast'
@@ -210,11 +210,12 @@ const showExportMenu = ref(false)
 const showDraftModal = ref(false)
 const showThemeMenu = ref(false)
 const showShortcuts = ref(false)
-const showCloseConfirm = ref(false)
-const pendingCloseTab = ref<Tab | null>(null)
 const focusMode = ref(false)
+const readingMode = ref(false)
 const showTemplateModal = ref(false)
 const showGlobalSearch = ref(false)
+const showCloseConfirm = ref(false)
+const pendingCloseTabId = ref<number | null>(null)
 const drafts = ref(getDrafts())
 const editorPanelRef = ref<InstanceType<typeof EditorPanel> | null>(null)
 const previewPanelRef = ref<InstanceType<typeof PreviewPanel> | null>(null)
@@ -265,11 +266,16 @@ const handleReorder = (fromId: number, toId: number) => {
 }
 
 // --- Auto-save ---
-const { start: startAutoSave, stop: stopAutoSave } = useAutoSave(tabs)
+const autoSaveEnabled = computed(() => preferences.value.autoSaveEnabled)
+const autoSaveInterval = computed(() => preferences.value.autoSaveInterval * 1000)
+const { start: startAutoSave, stop: stopAutoSave } = useAutoSave(tabs, activeTabId, {
+  enabled: autoSaveEnabled,
+  interval: autoSaveInterval
+})
 
 // --- Preferences local state ---
 const prefLocal = ref<Preferences>({ ...preferences.value })
-const updatePrefLocal = (key: keyof Preferences, value: number | string) => {
+const updatePrefLocal = (key: keyof Preferences, value: number | string | boolean) => {
   prefLocal.value = { ...prefLocal.value, [key]: value }
 }
 const applyPreferences = () => {
@@ -298,6 +304,7 @@ const handleTocNavigate = (slug: string) => {
 let isScrolling = false
 
 const handleEditorScroll = (scrollTop: number, scrollHeight: number, clientHeight: number) => {
+  if (!preferences.value.scrollSync) return
   if (isScrolling) return
   isScrolling = true
   const ratio = scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight)
@@ -306,6 +313,7 @@ const handleEditorScroll = (scrollTop: number, scrollHeight: number, clientHeigh
 }
 
 const handlePreviewScroll = (scrollTop: number, scrollHeight: number, clientHeight: number) => {
+  if (!preferences.value.scrollSync) return
   if (isScrolling) return
   isScrolling = true
   const ratio = scrollHeight <= clientHeight ? 0 : scrollTop / (scrollHeight - clientHeight)
@@ -409,16 +417,31 @@ const handleOpenFiles = async () => {
   const newTabs = await fileService.openFiles()
   newTabs.forEach(({ name, content, fileHandle }) => {
     addTab(createTab(name, content, fileHandle))
-    addRecent(name)
+    addRecent(name, fileHandle)
   })
 }
 
 const handleOpenRecent = async (name: string) => {
-  // Try to reopen via file picker (can't store handles in localStorage)
+  // 尝试从 IndexedDB 恢复 FileSystemFileHandle
+  const handle = await getFileHandle(name)
+  if (handle) {
+    try {
+      const file = await handle.getFile()
+      const content = await file.text()
+      addTab(createTab(name, content, handle))
+      addRecent(name, handle)
+      showToast(`已打开 ${name}`, 'success')
+      return
+    } catch {
+      // 权限被拒绝或文件已删除，回退到文件选择器
+      showToast('文件无法访问，请重新选择', 'info')
+    }
+  }
+  // 回退：弹出文件选择器
   const newTabs = await fileService.openFiles()
   newTabs.forEach(({ name: fileName, content, fileHandle }) => {
     addTab(createTab(fileName, content, fileHandle))
-    addRecent(fileName)
+    addRecent(fileName, fileHandle)
   })
 }
 
@@ -435,18 +458,14 @@ const handleSave = async () => {
       showToast('保存失败', 'error')
     }
   } else {
-    const result = await fileService.saveAsFile(tab)
-    if (result === true) {
-      markSaved()
-      showToast('保存成功', 'success')
-    } else if (result === false) {
-      showToast('保存失败', 'error')
-    }
-    // result === null 表示用户取消，不弹窗
+    // 无 fileHandle（新建文件或回退打开），不弹浏览器保存框
+    // 内容已由自动保存草稿保留
+    markSaved()
+    showToast('已保存为草稿', 'success')
   }
 }
 
-const handleCloseTab = (id: number) => {
+const handleCloseTab = async (id: number) => {
   const tab = tabs.value.find(t => t.id === id)
   if (!tab) return
   // 固定标签不允许关闭
@@ -454,56 +473,56 @@ const handleCloseTab = (id: number) => {
     showToast('已固定的标签无法关闭，请先取消固定', 'info')
     return
   }
-  // 未修改直接关闭
-  if (!tab.modified) {
-    clearHistory(id)
-    closeTab(id)
+  // 有未保存更改：弹窗让用户选择
+  if (tab.modified) {
+    pendingCloseTabId.value = id
+    showCloseConfirm.value = true
     return
   }
-  // 有未保存更改 → 弹窗确认
-  pendingCloseTab.value = tab
-  showCloseConfirm.value = true
+  clearHistory(id)
+  closeTab(id)
 }
 
-// 关闭确认弹窗：保存
-const handleCloseSave = async () => {
-  const tab = pendingCloseTab.value
-  if (!tab) return
+// 关闭确认弹窗回调
+const handleCloseConfirmSave = async () => {
+  const id = pendingCloseTabId.value
   showCloseConfirm.value = false
-
-  let result: boolean | null = false
+  pendingCloseTabId.value = null
+  if (id === null) return
+  const tab = tabs.value.find(t => t.id === id)
+  if (!tab) return
   if (tab.fileHandle) {
-    result = await fileService.saveFile(tab)
+    const saved = await fileService.saveFile(tab)
+    if (saved) {
+      markSaved()
+      showToast('已保存并关闭', 'success')
+    } else {
+      showToast('保存失败', 'error')
+      return
+    }
   } else {
-    result = await fileService.saveAsFile(tab)
+    // 无 fileHandle，保存为草稿
+    showToast('已关闭，内容已保存为草稿', 'info')
   }
-
-  if (result === true) {
-    markSaved()
-    showToast('保存成功', 'success')
-    clearHistory(tab.id)
-    closeTab(tab.id)
-  } else if (result === false) {
-    showToast('保存失败', 'error')
-  }
-  // result === null 表示用户取消保存，不关闭标签
+  clearHistory(id)
+  closeTab(id)
 }
 
-// 关闭确认弹窗：不保存（丢弃更改）
-const handleCloseDiscard = () => {
-  const tab = pendingCloseTab.value
-  if (!tab) return
+const handleCloseConfirmDiscard = () => {
+  const id = pendingCloseTabId.value
   showCloseConfirm.value = false
-  clearHistory(tab.id)
-  closeTab(tab.id)
-  pendingCloseTab.value = null
+  pendingCloseTabId.value = null
+  if (id === null) return
+  clearHistory(id)
+  closeTab(id)
+  showToast('已关闭且未保存', 'info')
 }
 
-// 关闭确认弹窗：取消
-const handleCloseCancel = () => {
+const handleCloseConfirmCancel = () => {
   showCloseConfirm.value = false
-  pendingCloseTab.value = null
+  pendingCloseTabId.value = null
 }
+
 
 const handleExport = (format: 'md' | 'html' | 'pdf' | 'outline') => {
   showExportMenu.value = false
@@ -525,6 +544,13 @@ const handleExport = (format: 'md' | 'html' | 'pdf' | 'outline') => {
   }
 }
 
+// --- 打印 ---
+const handlePrint = () => {
+  const tab = tabs.value.find(t => t.id === activeTabId.value)
+  if (!tab) return
+  fileService.exportPDF(tab, preferences.value.customCss)
+}
+
 // --- Drag and drop ---
 const handleDrop = async (e: DragEvent) => {
   const files = e.dataTransfer?.files
@@ -534,7 +560,20 @@ const handleDrop = async (e: DragEvent) => {
     if (file.name.match(/\.(md|markdown|txt)$/i)) {
       const content = await file.text()
       addTab(createTab(file.name, content))
-      addRecent(file.name)
+      addRecent(file.name, null)
+    } else if (file.type.startsWith('image/')) {
+      // 拖拽图片 → 转 base64 插入当前标签
+      const reader = new FileReader()
+      reader.onload = () => {
+        const base64 = reader.result as string
+        const insert = `![${file.name.replace(/\.[^.]+$/, '')}](${base64})`
+        const tab = tabs.value.find(t => t.id === activeTabId.value)
+        if (tab) {
+          updateContent(tab.content + (tab.content ? '\n' : '') + insert)
+          showToast('图片已插入', 'success')
+        }
+      }
+      reader.readAsDataURL(file)
     }
   }
 }
@@ -544,6 +583,11 @@ const contextMenu = ref({ visible: false, x: 0, y: 0, tabId: 0 })
 const contextMenuPinned = computed(() => {
   const tab = tabs.value.find(t => t.id === contextMenu.value.tabId)
   return tab?.pinned ?? false
+})
+
+const pendingCloseTabName = computed(() => {
+  const tab = tabs.value.find(t => t.id === pendingCloseTabId.value)
+  return tab?.name || '未命名'
 })
 
 const handleTabContextMenu = (e: MouseEvent, tabId: number) => {
@@ -594,9 +638,18 @@ const handleContextAction = (action: string) => {
 // --- Draft restore ---
 const restoreDrafts = () => {
   showDraftModal.value = false
+  let activeName: string | null = null
   drafts.value.forEach(draft => {
-    addTab(createTab(draft.name, draft.content))
+    const tab = createTab(draft.name, draft.content)
+    tab.pinned = draft.pinned
+    if (draft.active) activeName = draft.name
+    addTab(tab)
   })
+  // 恢复活动标签
+  if (activeName) {
+    const activeTab = tabs.value.find(t => t.name === activeName)
+    if (activeTab) switchTab(activeTab.id)
+  }
   showToast(`已恢复 ${drafts.value.length} 个草稿`, 'info')
   clearDrafts()
 }
@@ -644,6 +697,8 @@ register('ctrl+s', (e) => { e.preventDefault(); handleSave() })
 register('ctrl+/', (e) => { e.preventDefault(); showShortcuts.value = true })
 register('ctrl+shift+f', (e) => { e.preventDefault(); focusMode.value = !focusMode.value })
 register('ctrl+shift+h', (e) => { e.preventDefault(); showGlobalSearch.value = true })
+register('ctrl+shift+r', (e) => { e.preventDefault(); readingMode.value = !readingMode.value })
+register('ctrl+p', (e) => { e.preventDefault(); handlePrint() })
 
 // --- Close menus on outside click ---
 const handleOutsideClick = () => {
@@ -711,6 +766,16 @@ watch(() => preferences.value.customCss, (css) => {
 
 .focus-mode :deep(.preview-panel) {
   display: none !important;
+}
+
+.reading-mode :deep(.editor-panel),
+.reading-mode .divider,
+.reading-mode :deep(.toc-panel) {
+  display: none !important;
+}
+
+.reading-mode :deep(.preview-panel) {
+  flex: 1 1 100% !important;
 }
 
 .export-wrapper {

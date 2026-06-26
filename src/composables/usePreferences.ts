@@ -11,6 +11,11 @@ export interface Preferences {
   customCss: string
   editorMode: EditorMode
   wordGoal: number
+  wordWrap: boolean
+  spellcheck: boolean
+  scrollSync: boolean
+  autoSaveEnabled: boolean
+  autoSaveInterval: number // seconds
 }
 
 const DEFAULTS: Preferences = {
@@ -19,7 +24,12 @@ const DEFAULTS: Preferences = {
   editorWidth: 50,
   customCss: '',
   editorMode: 'default',
-  wordGoal: 0
+  wordGoal: 0,
+  wordWrap: true,
+  spellcheck: true,
+  scrollSync: true,
+  autoSaveEnabled: true,
+  autoSaveInterval: 30
 }
 
 function load(): Preferences {

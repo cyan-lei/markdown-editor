@@ -20,12 +20,14 @@
       :searchQuery="search.searchQuery.value"
       :replaceQuery="search.replaceQuery.value"
       :caseSensitive="search.caseSensitive.value"
+      :useRegex="search.useRegex.value"
       :matchCount="search.matchCount.value"
       :currentMatch="search.currentMatch.value"
       :history="search.searchHistory.value"
       @update:searchQuery="onSearchQueryChange"
       @update:replaceQuery="search.replaceQuery.value = $event"
       @update:caseSensitive="onCaseSensitiveChange"
+      @update:useRegex="search.useRegex.value = $event; search.search()"
       @next="search.findNext()"
       @prev="search.findPrev()"
       @replace="search.replace()"
@@ -47,12 +49,16 @@
       <button class="goto-btn" @click="gotoLineVisible = false">取消</button>
     </div>
     <div class="editor-wrap">
+      <div class="search-highlight-layer" ref="highlightLayerRef" aria-hidden="true"></div>
+      <div class="current-line-highlight" ref="currentLineRef" aria-hidden="true"></div>
       <div class="line-numbers" ref="lineNumbersRef">{{ lineNumbersText }}</div>
       <textarea
         ref="textareaRef"
         class="editor"
+        :class="{ 'no-wrap': !wordWrap }"
         :value="modelValue"
         :style="{ fontSize: fontSize ? `${fontSize}px` : undefined, lineHeight: lineHeight ?? undefined }"
+        :wrap="wordWrap === false ? 'off' : 'soft'"
         @input="onInput"
         @keydown="onKeydown"
         @paste="onPaste"
@@ -60,7 +66,7 @@
         @keyup="updateCursor"
         @click="updateCursor"
         @select="updateCursor"
-        spellcheck="true"
+        :spellcheck="spellcheck ?? true"
         placeholder="开始编写您的Markdown..."
       ></textarea>
     </div>
@@ -95,6 +101,8 @@ const props = defineProps<{
   lineHeight?: number
   editorMode?: EditorMode
   wordGoal?: number
+  wordWrap?: boolean
+  spellcheck?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -106,6 +114,8 @@ const emit = defineEmits<{
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const lineNumbersRef = ref<HTMLElement | null>(null)
+const highlightLayerRef = ref<HTMLElement | null>(null)
+const currentLineRef = ref<HTMLElement | null>(null)
 
 // 行号
 const lineNumbersText = computed(() => {
@@ -127,6 +137,18 @@ const updateCursor = () => {
     col: lines[lines.length - 1].length + 1,
     selectedChars: el.selectionEnd - el.selectionStart
   }
+  updateCurrentLineHighlight()
+}
+
+// 当前行高亮
+const updateCurrentLineHighlight = () => {
+  const el = textareaRef.value
+  const hl = currentLineRef.value
+  if (!el || !hl) return
+  const lineHeight = parseInt(getComputedStyle(el).lineHeight) || 24
+  const lineIdx = cursorInfo.value.line - 1
+  hl.style.top = `${lineIdx * lineHeight - el.scrollTop + 16}px`
+  hl.style.height = `${lineHeight}px`
 }
 
 const wordCount = computed(() => {
@@ -218,6 +240,45 @@ const closeSearch = () => {
   // 焦点回到编辑器
   requestAnimationFrame(() => textareaRef.value?.focus())
 }
+
+const updateSearchHighlights = () => {
+  const layer = highlightLayerRef.value
+  const el = textareaRef.value
+  if (!layer || !el) return
+  layer.innerHTML = ''
+  if (!search.searchQuery.value || search.matchCount.value === 0) return
+  const matches = search.getMatches()
+  const lineHeight = parseInt(getComputedStyle(el).lineHeight) || 24
+  const charWidth = parseFloat(getComputedStyle(el).fontFamily) || 0
+  // Use a mirror approach: measure character position
+  const value = el.value
+  for (const m of matches) {
+    const beforeMatch = value.substring(0, m.start)
+    const lines = beforeMatch.split('\n')
+    const lineIdx = lines.length - 1
+    const colIdx = lines[lines.length - 1].length
+    const matchText = value.substring(m.start, m.end)
+    const matchLines = matchText.split('\n')
+
+    for (let i = 0; i < matchLines.length; i++) {
+      const top = (lineIdx + i) * lineHeight - el.scrollTop
+      const left = (i === 0 ? colIdx : 0)
+      // Approximate char width using monospace font
+      const charWidthApprox = parseFloat(getComputedStyle(el).fontSize) * 0.6
+      const leftPx = left * charWidthApprox - el.scrollLeft + 16 // 16px padding
+      const width = matchLines[i].length * charWidthApprox
+      const highlight = document.createElement('div')
+      highlight.className = 'search-highlight'
+      highlight.style.top = `${top + 16}px`
+      highlight.style.left = `${leftPx}px`
+      highlight.style.width = `${width}px`
+      highlight.style.height = `${lineHeight}px`
+      layer.appendChild(highlight)
+    }
+  }
+}
+
+watch(() => search.matchCount.value, () => updateSearchHighlights())
 
 // --- 跳转到行 ---
 const gotoLineVisible = ref(false)
@@ -395,6 +456,50 @@ const handleAutoComplete = (e: KeyboardEvent) => {
   // 输入 | 后在表格行 → 自动补全列分隔
   if (e.key === '|' && before.split('\n').pop()?.includes('|')) {
     // 表格行已有一个 |，不再特殊处理
+  }
+
+  // 列表/任务项回车自动续行
+  if (e.key === 'Enter' && !e.shiftKey) {
+    const lineStart = value.lastIndexOf('\n', pos - 1) + 1
+    const currentLine = value.substring(lineStart, pos)
+    // 匹配列表标记：- / * / + / 1. / - [ ] / - [x]
+    const listMatch = currentLine.match(/^(\s*)([-*+]\s+(?:\[[ x]\]\s+)?|\d+\.\s+)(.*)/)
+    if (listMatch) {
+      const indent = listMatch[1]
+      const marker = listMatch[2]
+      const content = listMatch[3]
+      // 空列表项回车 → 取消列表标记
+      if (content.trim() === '') {
+        e.preventDefault()
+        const newValue = value.substring(0, lineStart) + indent + value.substring(pos)
+        emit('update', newValue)
+        el.value = newValue
+        el.setSelectionRange(lineStart + indent.length, lineStart + indent.length)
+        history.push(newValue, lineStart + indent.length, lineStart + indent.length)
+        updateCursor()
+        return
+      }
+      // 续行：生成下一个列表标记
+      e.preventDefault()
+      let newMarker: string
+      // 有序列表：序号+1
+      const orderedMatch = marker.match(/^(\d+)\.\s+/)
+      if (orderedMatch) {
+        newMarker = `${parseInt(orderedMatch[1]) + 1}. `
+      } else {
+        // 任务列表：重置为未完成
+        newMarker = marker.replace(/\[[x]\]/, '[ ]')
+      }
+      const insert = '\n' + indent + newMarker
+      const newValue = value.substring(0, pos) + insert + value.substring(pos)
+      emit('update', newValue)
+      el.value = newValue
+      const cursorPos = pos + insert.length
+      el.setSelectionRange(cursorPos, cursorPos)
+      history.push(newValue, cursorPos, cursorPos)
+      updateCursor()
+      return
+    }
   }
 }
 
@@ -613,7 +718,39 @@ const handleAutoPair = (e: KeyboardEvent): boolean => {
     }
   }
 
-  // 3) 按 Tab 在配对符号中间 → 跳出到闭括号后
+  // 3) Tab/Shift+Tab 多行缩进（有选区时）
+  if (e.key === 'Tab' && start !== end) {
+    e.preventDefault()
+    const lineStart = value.lastIndexOf('\n', start - 1) + 1
+    const selectedText = value.substring(lineStart, end)
+    const lines = selectedText.split('\n')
+
+    if (e.shiftKey) {
+      // 反向缩进：移除每行开头的 2 空格或 1 tab
+      const newLines = lines.map(line => line.replace(/^(\t| {1,2})/, ''))
+      const newText = newLines.join('\n')
+      const newValue = value.substring(0, lineStart) + newText + value.substring(end)
+      emit('update', newValue)
+      el.value = newValue
+      const removed = selectedText.length - newText.length
+      el.setSelectionRange(lineStart, end - removed)
+      history.push(newValue, lineStart, end - removed)
+    } else {
+      // 正向缩进：每行开头加 2 空格
+      const newLines = lines.map(line => '  ' + line)
+      const newText = newLines.join('\n')
+      const newValue = value.substring(0, lineStart) + newText + value.substring(end)
+      emit('update', newValue)
+      el.value = newValue
+      const added = newText.length - selectedText.length
+      el.setSelectionRange(lineStart, end + added)
+      history.push(newValue, lineStart, end + added)
+    }
+    updateCursor()
+    return true
+  }
+
+  // 4) 按 Tab 在配对符号中间 → 跳出到闭括号后
   if (e.key === 'Tab' && start === end && start > 0) {
     const prev = value[start - 1]
     const next = value[start]
@@ -636,6 +773,8 @@ const onScroll = () => {
       lineNumbersRef.value.scrollTop = el.scrollTop
     }
   }
+  updateSearchHighlights()
+  updateCurrentLineHighlight()
 }
 
 // Update cursor when tab changes，并初始化历史记录
@@ -744,8 +883,36 @@ defineExpose({
 .editor-wrap {
   flex: 1;
   display: flex;
+  position: relative;
   min-height: 0;
   overflow: hidden;
+}
+
+.search-highlight-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.current-line-highlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--bg-tertiary);
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.search-highlight {
+  position: absolute;
+  background: rgba(255, 213, 79, 0.3);
+  border-radius: 2px;
 }
 
 .line-numbers {
@@ -776,10 +943,22 @@ defineExpose({
   outline: none;
   min-height: 0;
   overflow-y: auto;
+  position: relative;
+  z-index: 1;
 }
 
 .editor::placeholder {
   color: var(--text-tertiary);
+}
+
+.editor.no-wrap {
+  white-space: pre;
+  overflow-x: auto;
+}
+
+.editor.no-wrap {
+  white-space: pre;
+  overflow-x: auto;
 }
 
 .goto-line-bar {

@@ -32,6 +32,12 @@
         @click="$emit('update:caseSensitive', !caseSensitive)"
         title="区分大小写"
       >Aa</button>
+      <button
+        class="search-toggle"
+        :class="{ active: useRegex }"
+        @click="$emit('update:useRegex', !useRegex)"
+        title="正则表达式"
+      >.*</button>
       <span class="match-info" v-if="searchQuery">
         {{ matchCount > 0 ? currentMatch + 1 : 0 }}/{{ matchCount }}
       </span>
@@ -68,6 +74,7 @@ defineProps<{
   searchQuery: string
   replaceQuery: string
   caseSensitive: boolean
+  useRegex: boolean
   matchCount: number
   currentMatch: number
   history: string[]
@@ -77,6 +84,7 @@ defineEmits<{
   (e: 'update:searchQuery', value: string): void
   (e: 'update:replaceQuery', value: string): void
   (e: 'update:caseSensitive', value: boolean): void
+  (e: 'update:useRegex', value: boolean): void
   (e: 'search'): void
   (e: 'next'): void
   (e: 'prev'): void
