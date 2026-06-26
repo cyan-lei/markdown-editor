@@ -23,6 +23,7 @@ export interface Preferences {
   wordWrap: boolean
   spellcheck: boolean
   scrollSync: boolean
+  typewriterMode: boolean
   autoSaveEnabled: boolean
   autoSaveInterval: number // seconds
   imageConfig: GitHubImageConfig
@@ -38,6 +39,7 @@ const DEFAULTS: Preferences = {
   wordWrap: true,
   spellcheck: true,
   scrollSync: true,
+  typewriterMode: false,
   autoSaveEnabled: true,
   autoSaveInterval: 30,
   imageConfig: {

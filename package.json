@@ -11,6 +11,8 @@
     "highlight.js": "^11.9.0",
     "marked": "^11.0.0",
     "marked-highlight": "^2.2.4",
+    "markmap-lib": "^0.18.12",
+    "markmap-view": "^0.18.12",
     "vue": "^3.4.0"
   },
   "devDependencies": {

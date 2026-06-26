@@ -145,6 +145,13 @@ const updateCursor = () => {
     selectedChars: el.selectionEnd - el.selectionStart
   }
   updateCurrentLineHighlight()
+  // 打字机模式：光标行居中
+  if (preferences.value.typewriterMode) {
+    const lineHeight = parseInt(getComputedStyle(el).lineHeight) || 24
+    const cursorTop = (cursorInfo.value.line - 1) * lineHeight
+    const targetScroll = cursorTop - (el.clientHeight - lineHeight) / 2
+    el.scrollTop = Math.max(0, targetScroll)
+  }
 }
 
 // 当前行高亮

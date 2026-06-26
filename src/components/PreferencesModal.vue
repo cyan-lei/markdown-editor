@@ -67,6 +67,11 @@
                   @change="update('scrollSync', ($event.target as HTMLInputElement).checked)" />
                 <span class="toggle-name">滚动同步</span>
               </label>
+              <label class="toggle-item" :class="{ on: local.typewriterMode }">
+                <input type="checkbox" :checked="local.typewriterMode"
+                  @change="update('typewriterMode', ($event.target as HTMLInputElement).checked)" />
+                <span class="toggle-name">打字机模式</span>
+              </label>
               <label class="toggle-item" :class="{ on: local.autoSaveEnabled }">
                 <input type="checkbox" :checked="local.autoSaveEnabled"
                   @change="update('autoSaveEnabled', ($event.target as HTMLInputElement).checked)" />

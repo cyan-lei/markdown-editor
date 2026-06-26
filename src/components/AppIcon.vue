@@ -51,6 +51,19 @@ const paths: Record<string, string> = {
   duck: `
     <path d="M12 2C8 2 6 4 6 7c0 2 1 3 2 4-2 1-4 3-4 6 0 2 2 4 5 4h6c3 0 5-2 5-4 0-3-2-5-4-6 1-1 2-2 2-4 0-3-2-5-6-5z"/>
     <circle cx="10" cy="7" r="1" fill="currentColor"/>
-    <path d="M14 10c1 0 2-1 2-2"/>`
+    <path d="M14 10c1 0 2-1 2-2"/>`,
+  wand: `
+    <path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M12.2 6.2L11 5M12.2 11.8L11 13"/>
+    <path d="M3 21l9-9"/>`,
+  mindmap: `
+    <circle cx="12" cy="12" r="3"/>
+    <circle cx="5" cy="5" r="2"/>
+    <circle cx="19" cy="5" r="2"/>
+    <circle cx="5" cy="19" r="2"/>
+    <circle cx="19" cy="19" r="2"/>
+    <line x1="9.5" y1="9.5" x2="6.5" y2="6.5"/>
+    <line x1="14.5" y1="9.5" x2="17.5" y2="6.5"/>
+    <line x1="9.5" y1="14.5" x2="6.5" y2="17.5"/>
+    <line x1="14.5" y1="14.5" x2="17.5" y2="17.5"/>`
 }
 </script>
